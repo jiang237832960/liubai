@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../core/logger.dart';
 import '../core/theme.dart';
 import '../data/database.dart';
 import '../data/models.dart';
@@ -46,7 +47,6 @@ class _HomePageState extends State<HomePage> {
       final tags = await DatabaseHelper.instance.getAllSceneTags();
       setState(() {
         _tags = tags;
-        // 如果有默认标签ID，找到对应的标签
         if (_timerState.sceneTagId != null) {
           _selectedTag = tags.firstWhere(
             (tag) => tag.id == _timerState.sceneTagId,
@@ -55,7 +55,7 @@ class _HomePageState extends State<HomePage> {
         }
       });
     } catch (e) {
-      // 忽略错误
+      Logger.e('加载标签失败', error: e);
     }
   }
 
@@ -65,10 +65,25 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
+  void _startTimerTick() {
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_timerState.remaining.inSeconds > 0) {
+        setState(() {
+          _timerState = _timerState.copyWith(
+            remaining: Duration(
+              seconds: _timerState.remaining.inSeconds - 1,
+            ),
+          );
+        });
+      } else {
+        _completeTimer();
+      }
+    });
+  }
+
   Future<void> _startTimer() async {
     final now = DateTime.now();
     
-    // 创建新的留白会话
     final session = LiubaiSession(
       startTime: now,
       plannedDuration: _defaultDuration,
@@ -87,19 +102,7 @@ class _HomePageState extends State<HomePage> {
       );
     });
 
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_timerState.remaining.inSeconds > 0) {
-        setState(() {
-          _timerState = _timerState.copyWith(
-            remaining: Duration(
-              seconds: _timerState.remaining.inSeconds - 1,
-            ),
-          );
-        });
-      } else {
-        _completeTimer();
-      }
-    });
+    _startTimerTick();
   }
 
   void _pauseTimer() {
@@ -110,33 +113,15 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _resumeTimer() {
-    _startTimerResume();
-  }
-
-  void _startTimerResume() {
     setState(() {
       _timerState = _timerState.copyWith(status: TimerStatus.running);
     });
-
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_timerState.remaining.inSeconds > 0) {
-        setState(() {
-          _timerState = _timerState.copyWith(
-            remaining: Duration(
-              seconds: _timerState.remaining.inSeconds - 1,
-            ),
-          );
-        });
-      } else {
-        _completeTimer();
-      }
-    });
+    _startTimerTick();
   }
 
   Future<void> _stopTimer() async {
     _timer?.cancel();
     
-    // 更新会话为未完成
     if (_currentSessionId != null) {
       final now = DateTime.now();
       final actualDuration = _timerState.total.inMinutes - _timerState.remaining.inMinutes;
@@ -146,7 +131,7 @@ class _HomePageState extends State<HomePage> {
         startTime: _timerState.startTime!,
         endTime: now,
         plannedDuration: _defaultDuration,
-        actualDuration: actualDuration > 0 ? actualDuration : 1,
+        actualDuration: actualDuration > 0 ? actualDuration : 0,
         isCompleted: false,
         sceneTagId: _timerState.sceneTagId,
         createdAt: _timerState.startTime!,
@@ -169,7 +154,6 @@ class _HomePageState extends State<HomePage> {
   Future<void> _completeTimer() async {
     _timer?.cancel();
     
-    // 更新会话为已完成
     if (_currentSessionId != null) {
       final now = DateTime.now();
       
@@ -245,17 +229,14 @@ class _HomePageState extends State<HomePage> {
       body: SafeArea(
         child: Column(
           children: [
-            // 顶部留白
             const Expanded(flex: 2, child: SizedBox()),
             
-            // 品牌名（仅在空闲状态显示）
             if (_timerState.isIdle)
               const Text(
                 '留 白',
                 style: LiubaiTypography.brand,
               ),
             
-            // 计时器显示
             if (!_timerState.isIdle)
               Column(
                 children: [
@@ -268,7 +249,6 @@ class _HomePageState extends State<HomePage> {
                     _getStatusText(),
                     style: LiubaiTypography.caption,
                   ),
-                  // 显示当前标签
                   if (_selectedTag != null) ...[
                     const SizedBox(height: 16),
                     SceneTagChip(tag: _selectedTag),
@@ -276,10 +256,8 @@ class _HomePageState extends State<HomePage> {
                 ],
               ),
             
-            // 中间留白
             const Expanded(flex: 2, child: SizedBox()),
             
-            // 标签选择器（仅在空闲状态显示）
             if (_timerState.isIdle)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 32),
@@ -302,13 +280,10 @@ class _HomePageState extends State<HomePage> {
             
             const Expanded(flex: 1, child: SizedBox()),
             
-            // 操作按钮
             _buildActionButton(),
             
-            // 底部留白
             const Expanded(flex: 2, child: SizedBox()),
             
-            // 底部导航
             _buildBottomNav(),
           ],
         ),

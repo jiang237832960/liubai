@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:uuid/uuid.dart';
 import '../core/theme.dart';
 import '../services/audio_service.dart';
 
@@ -12,9 +13,11 @@ class AudioPage extends StatefulWidget {
 
 class _AudioPageState extends State<AudioPage> {
   final AudioService _audioService = AudioService();
+  final Uuid _uuid = const Uuid();
 
   @override
   void dispose() {
+    _audioService.dispose();
     super.dispose();
   }
 
@@ -237,7 +240,7 @@ class _AudioPageState extends State<AudioPage> {
         if (name != null && name.isNotEmpty) {
           // 创建自定义白噪音
           final customNoise = WhiteNoise(
-            id: DateTime.now().millisecondsSinceEpoch.toString(),
+            id: _uuid.v4(),
             name: name,
             emoji: '🎵',
             type: WhiteNoiseType.custom,

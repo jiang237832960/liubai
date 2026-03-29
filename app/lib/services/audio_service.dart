@@ -125,7 +125,7 @@ class AudioService {
 
       _player.playbackEventStream.listen(
         (event) {
-          Logger.d('播放事件: ${event.eventType}', tag: _tag);
+          Logger.d('播放事件', tag: _tag);
         },
         onError: (Object e, StackTrace st) {
           Logger.e('播放事件错误', tag: _tag, error: e, stackTrace: st);

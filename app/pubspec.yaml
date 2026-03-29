@@ -29,10 +29,11 @@ dependencies:
   file_picker: ^6.1.0
   
   # 通知
-  flutter_local_notifications: ^16.0.0
+  flutter_local_notifications: ^18.0.0
   
   # 工具
   intl: ^0.18.0
+  uuid: ^4.2.0
 
 dev_dependencies:
   flutter_test:
@@ -41,15 +42,3 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  
-  fonts:
-    - family: NotoSansSC
-      fonts:
-        - asset: assets/fonts/NotoSansSC-Light.ttf
-          weight: 300
-        - asset: assets/fonts/NotoSansSC-Regular.ttf
-          weight: 400
-        - asset: assets/fonts/NotoSansSC-Medium.ttf
-          weight: 500
-        - asset: assets/fonts/NotoSansSC-Bold.ttf
-          weight: 700

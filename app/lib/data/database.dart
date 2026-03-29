@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
-import '../core/exceptions.dart';
+import '../core/exceptions.dart' as app_exceptions;
 import '../core/logger.dart';
 import 'models.dart';
 
@@ -9,17 +9,17 @@ import 'models.dart';
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
   static Database? _database;
+  static final Object _lock = Object();
   static const String _tag = 'Database';
   static const String _dbName = 'liubai.db';
   static const String _dbBackupName = 'liubai.db.backup';
 
   DatabaseHelper._init();
 
-  /// 获取数据库实例
+  /// 获取数据库实例（线程安全）
   Future<Database> get database async {
     if (_database != null) return _database!;
-    _database = await _initDB(_dbName);
-    return _database!;
+    return await _initDB(_dbName);
   }
 
   /// 检查存储空间是否充足（至少100MB）
@@ -92,7 +92,7 @@ class DatabaseHelper {
       // 检查存储空间
       final hasSpace = await _checkStorageSpace();
       if (!hasSpace) {
-        throw const DatabaseException(
+        throw const app_exceptions.DatabaseException(
           '存储空间不足，请清理空间后重试',
           code: 'DB_STORAGE_FULL',
         );
@@ -172,7 +172,7 @@ class DatabaseHelper {
       rethrow;
     } catch (e, stackTrace) {
       Logger.e('数据库初始化失败', tag: _tag, error: e, stackTrace: stackTrace);
-      throw DatabaseException(
+      throw app_exceptions.DatabaseException(
         '数据库初始化失败: $e',
         code: 'DB_INIT_ERROR',
         originalError: e,
@@ -249,7 +249,7 @@ class DatabaseHelper {
       Logger.i('数据库修复完成', tag: _tag);
     } catch (e, stackTrace) {
       Logger.e('数据库修复失败', tag: _tag, error: e, stackTrace: stackTrace);
-      throw DatabaseException(
+      throw app_exceptions.DatabaseException(
         '数据库修复失败: $e',
         code: 'DB_REPAIR_ERROR',
         originalError: e,
@@ -333,7 +333,7 @@ class DatabaseHelper {
       Logger.i('插入默认设置成功', tag: _tag);
     } catch (e, stackTrace) {
       Logger.e('创建数据库表失败', tag: _tag, error: e, stackTrace: stackTrace);
-      throw DatabaseException(
+      throw app_exceptions.DatabaseException(
         '创建数据库表失败',
         code: 'DB_CREATE_ERROR',
         originalError: e,
@@ -352,7 +352,7 @@ class DatabaseHelper {
       return id;
     } catch (e, stackTrace) {
       Logger.e('插入会话失败', tag: _tag, error: e, stackTrace: stackTrace);
-      throw DatabaseException(
+      throw app_exceptions.DatabaseException(
         '插入会话失败',
         code: 'DB_INSERT_ERROR',
         originalError: e,
@@ -364,7 +364,7 @@ class DatabaseHelper {
   Future<int> updateSession(LiubaiSession session) async {
     try {
       if (session.id == null) {
-        throw const DatabaseException(
+        throw const app_exceptions.DatabaseException(
           '会话ID不能为空',
           code: 'DB_INVALID_ID',
         );
@@ -380,7 +380,7 @@ class DatabaseHelper {
       return count;
     } catch (e, stackTrace) {
       Logger.e('更新会话失败: id=${session.id}', tag: _tag, error: e, stackTrace: stackTrace);
-      throw DatabaseException(
+      throw app_exceptions.DatabaseException(
         '更新会话失败',
         code: 'DB_UPDATE_ERROR',
         originalError: e,
@@ -401,7 +401,7 @@ class DatabaseHelper {
       return count;
     } catch (e, stackTrace) {
       Logger.e('删除会话失败: id=$id', tag: _tag, error: e, stackTrace: stackTrace);
-      throw DatabaseException(
+      throw app_exceptions.DatabaseException(
         '删除会话失败',
         code: 'DB_DELETE_ERROR',
         originalError: e,
@@ -418,7 +418,7 @@ class DatabaseHelper {
       return maps.map((map) => LiubaiSession.fromMap(map)).toList();
     } catch (e, stackTrace) {
       Logger.e('获取所有会话失败', tag: _tag, error: e, stackTrace: stackTrace);
-      throw DatabaseException(
+      throw app_exceptions.DatabaseException(
         '获取所有会话失败',
         code: 'DB_QUERY_ERROR',
         originalError: e,
@@ -447,7 +447,7 @@ class DatabaseHelper {
       return maps.map((map) => LiubaiSession.fromMap(map)).toList();
     } catch (e, stackTrace) {
       Logger.e('获取今日会话失败', tag: _tag, error: e, stackTrace: stackTrace);
-      throw DatabaseException(
+      throw app_exceptions.DatabaseException(
         '获取今日会话失败',
         code: 'DB_QUERY_ERROR',
         originalError: e,
@@ -478,7 +478,7 @@ class DatabaseHelper {
       );
     } catch (e, stackTrace) {
       Logger.e('获取今日统计失败', tag: _tag, error: e, stackTrace: stackTrace);
-      throw DatabaseException(
+      throw app_exceptions.DatabaseException(
         '获取今日统计失败',
         code: 'DB_STATS_ERROR',
         originalError: e,
@@ -503,7 +503,7 @@ class DatabaseHelper {
       return UserSettings();
     } catch (e, stackTrace) {
       Logger.e('获取设置失败', tag: _tag, error: e, stackTrace: stackTrace);
-      throw DatabaseException(
+      throw app_exceptions.DatabaseException(
         '获取设置失败',
         code: 'DB_QUERY_ERROR',
         originalError: e,
@@ -525,7 +525,7 @@ class DatabaseHelper {
       return count;
     } catch (e, stackTrace) {
       Logger.e('更新设置失败', tag: _tag, error: e, stackTrace: stackTrace);
-      throw DatabaseException(
+      throw app_exceptions.DatabaseException(
         '更新设置失败',
         code: 'DB_UPDATE_ERROR',
         originalError: e,
@@ -547,7 +547,7 @@ class DatabaseHelper {
       return maps.map((map) => SceneTag.fromMap(map)).toList();
     } catch (e, stackTrace) {
       Logger.e('获取所有标签失败', tag: _tag, error: e, stackTrace: stackTrace);
-      throw DatabaseException(
+      throw app_exceptions.DatabaseException(
         '获取所有标签失败',
         code: 'DB_QUERY_ERROR',
         originalError: e,
@@ -571,7 +571,7 @@ class DatabaseHelper {
       return null;
     } catch (e, stackTrace) {
       Logger.e('获取标签失败: id=$id', tag: _tag, error: e, stackTrace: stackTrace);
-      throw DatabaseException(
+      throw app_exceptions.DatabaseException(
         '获取标签失败',
         code: 'DB_QUERY_ERROR',
         originalError: e,
@@ -588,7 +588,7 @@ class DatabaseHelper {
       return id;
     } catch (e, stackTrace) {
       Logger.e('插入标签失败: ${tag.name}', tag: _tag, error: e, stackTrace: stackTrace);
-      throw DatabaseException(
+      throw app_exceptions.DatabaseException(
         '插入标签失败',
         code: 'DB_INSERT_ERROR',
         originalError: e,
@@ -600,7 +600,7 @@ class DatabaseHelper {
   Future<int> updateSceneTag(SceneTag tag) async {
     try {
       if (tag.id == null) {
-        throw const DatabaseException(
+        throw const app_exceptions.DatabaseException(
           '标签ID不能为空',
           code: 'DB_INVALID_ID',
         );
@@ -616,7 +616,7 @@ class DatabaseHelper {
       return count;
     } catch (e, stackTrace) {
       Logger.e('更新标签失败: id=${tag.id}', tag: _tag, error: e, stackTrace: stackTrace);
-      throw DatabaseException(
+      throw app_exceptions.DatabaseException(
         '更新标签失败',
         code: 'DB_UPDATE_ERROR',
         originalError: e,
@@ -641,7 +641,7 @@ class DatabaseHelper {
       return count;
     } catch (e, stackTrace) {
       Logger.e('删除标签失败: id=$id', tag: _tag, error: e, stackTrace: stackTrace);
-      throw DatabaseException(
+      throw app_exceptions.DatabaseException(
         '删除标签失败',
         code: 'DB_DELETE_ERROR',
         originalError: e,
@@ -663,7 +663,7 @@ class DatabaseHelper {
       return maps.map((map) => LiubaiSession.fromMap(map)).toList();
     } catch (e, stackTrace) {
       Logger.e('按标签获取会话失败: tagId=$tagId', tag: _tag, error: e, stackTrace: stackTrace);
-      throw DatabaseException(
+      throw app_exceptions.DatabaseException(
         '按标签获取会话失败',
         code: 'DB_QUERY_ERROR',
         originalError: e,
@@ -700,7 +700,7 @@ class DatabaseHelper {
       };
     } catch (e, stackTrace) {
       Logger.e('获取标签统计失败: tagId=$tagId', tag: _tag, error: e, stackTrace: stackTrace);
-      throw DatabaseException(
+      throw app_exceptions.DatabaseException(
         '获取标签统计失败',
         code: 'DB_STATS_ERROR',
         originalError: e,
@@ -735,7 +735,7 @@ class DatabaseHelper {
       }).toList();
     } catch (e, stackTrace) {
       Logger.e('获取标签分布统计失败', tag: _tag, error: e, stackTrace: stackTrace);
-      throw DatabaseException(
+      throw app_exceptions.DatabaseException(
         '获取标签分布统计失败',
         code: 'DB_STATS_ERROR',
         originalError: e,
@@ -767,15 +767,19 @@ class DatabaseHelper {
         );
 
         int totalDuration = 0;
+        int completedCount = 0;
         for (var map in maps) {
-          totalDuration += (map['actual_duration'] as int?) ?? 0;
+          final actualDuration = (map['actual_duration'] as int?) ?? 0;
+          final isCompleted = map['is_completed'] == 1;
+          totalDuration += actualDuration;
+          if (isCompleted) completedCount++;
         }
 
         stats.add(DailyStats(
           date: date.toIso8601String().split('T')[0],
           totalDuration: totalDuration,
           sessionCount: maps.length,
-          completedCount: maps.length,
+          completedCount: completedCount,
         ));
       }
 
@@ -783,7 +787,7 @@ class DatabaseHelper {
       return stats;
     } catch (e, stackTrace) {
       Logger.e('获取7天统计失败', tag: _tag, error: e, stackTrace: stackTrace);
-      throw DatabaseException(
+      throw app_exceptions.DatabaseException(
         '获取7天统计失败',
         code: 'DB_STATS_ERROR',
         originalError: e,
@@ -813,15 +817,19 @@ class DatabaseHelper {
         );
 
         int totalDuration = 0;
+        int completedCount = 0;
         for (var map in maps) {
-          totalDuration += (map['actual_duration'] as int?) ?? 0;
+          final actualDuration = (map['actual_duration'] as int?) ?? 0;
+          final isCompleted = map['is_completed'] == 1;
+          totalDuration += actualDuration;
+          if (isCompleted) completedCount++;
         }
 
         stats.add(DailyStats(
           date: date.toIso8601String().split('T')[0],
           totalDuration: totalDuration,
           sessionCount: maps.length,
-          completedCount: maps.length,
+          completedCount: completedCount,
         ));
       }
 
@@ -829,7 +837,7 @@ class DatabaseHelper {
       return stats;
     } catch (e, stackTrace) {
       Logger.e('获取30天统计失败', tag: _tag, error: e, stackTrace: stackTrace);
-      throw DatabaseException(
+      throw app_exceptions.DatabaseException(
         '获取30天统计失败',
         code: 'DB_STATS_ERROR',
         originalError: e,
@@ -847,7 +855,7 @@ class DatabaseHelper {
           COUNT(*) as total_sessions,
           SUM(CASE WHEN is_completed = 1 THEN actual_duration ELSE 0 END) as total_duration,
           SUM(CASE WHEN is_completed = 1 THEN 1 ELSE 0 END) as completed_sessions,
-          COUNT(DISTINCT DATE(start_time / 1000, 'unixepoch')) as active_days
+          COUNT(DISTINCT datetime((start_time / 1000), 'unixepoch', 'localtime')) as active_days
         FROM sessions
       ''');
 
@@ -870,7 +878,7 @@ class DatabaseHelper {
       };
     } catch (e, stackTrace) {
       Logger.e('获取总统计失败', tag: _tag, error: e, stackTrace: stackTrace);
-      throw DatabaseException(
+      throw app_exceptions.DatabaseException(
         '获取总统计失败',
         code: 'DB_STATS_ERROR',
         originalError: e,
@@ -887,7 +895,7 @@ class DatabaseHelper {
       Logger.i('数据库已关闭', tag: _tag);
     } catch (e, stackTrace) {
       Logger.e('关闭数据库失败', tag: _tag, error: e, stackTrace: stackTrace);
-      throw DatabaseException(
+      throw app_exceptions.DatabaseException(
         '关闭数据库失败',
         code: 'DB_CLOSE_ERROR',
         originalError: e,

@@ -74,21 +74,21 @@ void main() {
       });
     });
 
-    group('validateVolume', () {
+    group('clampVolume', () {
       test('should return same value for valid range (0.0-1.0)', () {
-        expect(Validators.validateVolume(0.0), equals(0.0));
-        expect(Validators.validateVolume(0.5), equals(0.5));
-        expect(Validators.validateVolume(1.0), equals(1.0));
+        expect(Validators.clampVolume(0.0), equals(0.0));
+        expect(Validators.clampVolume(0.5), equals(0.5));
+        expect(Validators.clampVolume(1.0), equals(1.0));
       });
 
       test('should clamp value below 0.0 to 0.0', () {
-        expect(Validators.validateVolume(-0.1), equals(0.0));
-        expect(Validators.validateVolume(-1.0), equals(0.0));
+        expect(Validators.clampVolume(-0.1), equals(0.0));
+        expect(Validators.clampVolume(-1.0), equals(0.0));
       });
 
       test('should clamp value above 1.0 to 1.0', () {
-        expect(Validators.validateVolume(1.1), equals(1.0));
-        expect(Validators.validateVolume(2.0), equals(1.0));
+        expect(Validators.clampVolume(1.1), equals(1.0));
+        expect(Validators.clampVolume(2.0), equals(1.0));
       });
     });
 

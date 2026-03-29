@@ -23,8 +23,8 @@ class Validators {
   static void validateTagName(String name) {
     if (name.trim().isEmpty) {
       throw const ValidationException(
-        '标签名称不能为空',
-        code: 'TAG_NAME_EMPTY',
+        '标签名称不能为空或仅包含空白字符',
+        code: 'TAG_NAME_INVALID',
       );
     }
     if (name.trim().length > 20) {
@@ -33,24 +33,11 @@ class Validators {
         code: 'TAG_NAME_TOO_LONG',
       );
     }
-    // 检查是否只包含空白字符
-    if (name.trim().isEmpty) {
-      throw const ValidationException(
-        '标签名称不能仅包含空白字符',
-        code: 'TAG_NAME_INVALID',
-      );
-    }
   }
 
-  /// 验证音量值
-  static double validateVolume(double volume) {
-    if (volume < 0.0) {
-      return 0.0;
-    }
-    if (volume > 1.0) {
-      return 1.0;
-    }
-    return volume;
+  /// 限制音量值在有效范围内
+  static double clampVolume(double volume) {
+    return volume.clamp(0.0, 1.0);
   }
 
   /// 验证备注文本
@@ -111,17 +98,6 @@ class Validators {
     // 注意：实际文件大小检查需要在文件操作中完成
   }
 
-  /// 验证主题模式值
-  static void validateThemeMode(String mode) {
-    final validModes = ['light', 'dark', 'system'];
-    if (!validModes.contains(mode)) {
-      throw ValidationException(
-        '无效的主题模式: $mode，可选值: ${validModes.join(", ")}',
-        code: 'INVALID_THEME_MODE',
-      );
-    }
-  }
-
   /// 安全的字符串截断
   static String truncateString(String text, int maxLength, {String suffix = '...'}) {
     if (text.length <= maxLength) {
@@ -133,6 +109,17 @@ class Validators {
   /// 清理字符串（移除首尾空白，合并连续空白）
   static String sanitizeString(String text) {
     return text.trim().replaceAll(RegExp(r'\s+'), ' ');
+  }
+
+  /// 验证主题模式值
+  static void validateThemeMode(String mode) {
+    final validModes = ['light', 'dark', 'system'];
+    if (!validModes.contains(mode)) {
+      throw ValidationException(
+        '无效的主题模式: $mode，可选值: ${validModes.join(", ")}',
+        code: 'INVALID_THEME_MODE',
+      );
+    }
   }
 }
 

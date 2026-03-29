@@ -19,29 +19,23 @@ class LiubaiColors {
 
 /// 留白品牌字体系统
 class LiubaiTypography {
-  static const String fontFamily = 'NotoSansSC';
-  
   // 大标题 - 品牌名
   static const TextStyle brand = TextStyle(
-    fontFamily: fontFamily,
     fontSize: 48,
     fontWeight: FontWeight.w300,
     letterSpacing: 16,
     color: LiubaiColors.inkBlack,
   );
   
-  // 计时器显示
   static const TextStyle timer = TextStyle(
-    fontFamily: fontFamily,
     fontSize: 72,
     fontWeight: FontWeight.w200,
     letterSpacing: 4,
     color: LiubaiColors.inkBlack,
   );
-  
+
   // 页面标题
   static const TextStyle h1 = TextStyle(
-    fontFamily: fontFamily,
     fontSize: 32,
     fontWeight: FontWeight.w400,
     color: LiubaiColors.inkBlack,
@@ -49,7 +43,6 @@ class LiubaiTypography {
   
   // 副标题
   static const TextStyle h2 = TextStyle(
-    fontFamily: fontFamily,
     fontSize: 24,
     fontWeight: FontWeight.w400,
     color: LiubaiColors.inkBlack,
@@ -57,7 +50,6 @@ class LiubaiTypography {
   
   // 正文
   static const TextStyle body = TextStyle(
-    fontFamily: fontFamily,
     fontSize: 16,
     fontWeight: FontWeight.w400,
     color: LiubaiColors.inkBlack,
@@ -65,7 +57,6 @@ class LiubaiTypography {
   
   // 小字
   static const TextStyle caption = TextStyle(
-    fontFamily: fontFamily,
     fontSize: 14,
     fontWeight: FontWeight.w400,
     color: LiubaiColors.pineSmokeGray,
@@ -73,7 +64,6 @@ class LiubaiTypography {
   
   // 按钮文字
   static const TextStyle button = TextStyle(
-    fontFamily: fontFamily,
     fontSize: 16,
     fontWeight: FontWeight.w500,
     letterSpacing: 2,
@@ -82,7 +72,6 @@ class LiubaiTypography {
   
   // 深色模式样式
   static const TextStyle brandDark = TextStyle(
-    fontFamily: fontFamily,
     fontSize: 48,
     fontWeight: FontWeight.w300,
     letterSpacing: 16,
@@ -90,7 +79,6 @@ class LiubaiTypography {
   );
   
   static const TextStyle timerDark = TextStyle(
-    fontFamily: fontFamily,
     fontSize: 72,
     fontWeight: FontWeight.w200,
     letterSpacing: 4,
@@ -98,35 +86,30 @@ class LiubaiTypography {
   );
   
   static const TextStyle h1Dark = TextStyle(
-    fontFamily: fontFamily,
     fontSize: 32,
     fontWeight: FontWeight.w400,
     color: LiubaiColors.liubaiWhite,
   );
   
   static const TextStyle h2Dark = TextStyle(
-    fontFamily: fontFamily,
     fontSize: 24,
     fontWeight: FontWeight.w400,
     color: LiubaiColors.liubaiWhite,
   );
   
   static const TextStyle bodyDark = TextStyle(
-    fontFamily: fontFamily,
     fontSize: 16,
     fontWeight: FontWeight.w400,
     color: LiubaiColors.liubaiWhite,
   );
   
   static const TextStyle captionDark = TextStyle(
-    fontFamily: fontFamily,
     fontSize: 14,
     fontWeight: FontWeight.w400,
     color: LiubaiColors.pineSmokeGray,
   );
   
   static const TextStyle buttonDark = TextStyle(
-    fontFamily: fontFamily,
     fontSize: 16,
     fontWeight: FontWeight.w500,
     letterSpacing: 2,
@@ -151,7 +134,6 @@ class LiubaiTheme {
         background: LiubaiColors.liubaiWhite,
         onBackground: LiubaiColors.inkBlack,
       ),
-      fontFamily: LiubaiTypography.fontFamily,
       textTheme: const TextTheme(
         displayLarge: LiubaiTypography.timer,
         displayMedium: LiubaiTypography.brand,
@@ -233,7 +215,6 @@ class LiubaiTheme {
         background: LiubaiColors.darkBackground,
         onBackground: LiubaiColors.liubaiWhite,
       ),
-      fontFamily: LiubaiTypography.fontFamily,
       textTheme: const TextTheme(
         displayLarge: LiubaiTypography.timerDark,
         displayMedium: LiubaiTypography.brandDark,
