@@ -19,7 +19,8 @@ class DatabaseHelper {
   /// 获取数据库实例（线程安全）
   Future<Database> get database async {
     if (_database != null) return _database!;
-    return await _initDB(_dbName);
+    _database = await _initDB(_dbName);
+    return _database!;
   }
 
   /// 检查存储空间是否充足（至少100MB）
