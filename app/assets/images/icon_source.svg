@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <!-- 背景 -->
+  <rect width="1024" height="1024" fill="#FFFFFF"/>
+  
+  <!-- 文字 "留" - 使用思源黑体风格 -->
+  <text x="512" y="580" 
+        font-family="Source Han Sans SC, Noto Sans SC, PingFang SC, Microsoft YaHei, sans-serif" 
+        font-size="512" 
+        font-weight="300"
+        fill="#1A1A1A"
+        text-anchor="middle"
+        dominant-baseline="middle">留</text>
+</svg>

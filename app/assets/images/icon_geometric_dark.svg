@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <!-- 背景 -->
+  <rect width="1024" height="1024" fill="#1A1A1A"/>
+  
+  <!-- 四个点代表留白的四个角 -->
+  <!-- 左上 -->
+  <circle cx="256" cy="256" r="64" fill="#FFFFFF"/>
+  <!-- 右上 -->
+  <circle cx="768" cy="256" r="64" fill="#FFFFFF"/>
+  <!-- 左下 -->
+  <circle cx="256" cy="768" r="64" fill="#FFFFFF"/>
+  <!-- 右下 -->
+  <circle cx="768" cy="768" r="64" fill="#FFFFFF"/>
+</svg>

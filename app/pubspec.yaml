@@ -1,0 +1,55 @@
+name: liubai
+description: 留白 - 东方美学极简专注工具
+
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # 状态管理
+  flutter_riverpod: ^2.4.0
+  
+  # 数据库
+  sqflite: ^2.3.0
+  path: ^1.8.3
+  
+  # 本地存储
+  shared_preferences: ^2.2.0
+  
+  # 音频
+  just_audio: ^0.9.35
+  
+  # 文件选择
+  file_picker: ^6.1.0
+  
+  # 通知
+  flutter_local_notifications: ^16.0.0
+  
+  # 工具
+  intl: ^0.18.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+  
+  fonts:
+    - family: NotoSansSC
+      fonts:
+        - asset: assets/fonts/NotoSansSC-Light.ttf
+          weight: 300
+        - asset: assets/fonts/NotoSansSC-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/NotoSansSC-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/NotoSansSC-Bold.ttf
+          weight: 700

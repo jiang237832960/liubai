@@ -1,0 +1,9 @@
+Windows Registry Editor Version 5.00
+
+; Flutter 环境变量配置
+; 双击此文件导入注册表
+
+[HKEY_CURRENT_USER\Environment]
+"PUB_HOSTED_URL"="https://pub.flutter-io.cn"
+"FLUTTER_STORAGE_BASE_URL"="https://storage.flutter-io.cn"
+"PATH"=hex(2):25,00,50,00,41,00,54,00,48,00,25,00,3b,00,44,00,3a,00,5c,00,50,00,72,00,6f,00,67,00,72,00,61,00,6d,00,73,00,5c,00,66,00,6c,00,75,00,74,00,74,00,65,00,72,00,5c,00,62,00,69,00,6e,00,00,00
