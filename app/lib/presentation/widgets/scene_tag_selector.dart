@@ -7,12 +7,14 @@ import '../../data/database.dart';
 class SceneTagSelector extends StatefulWidget {
   final int? selectedTagId;
   final Function(int?) onTagSelected;
+  final Function()? onTagsChanged;
   final bool showAddButton;
 
   const SceneTagSelector({
     super.key,
     this.selectedTagId,
     required this.onTagSelected,
+    this.onTagsChanged,
     this.showAddButton = true,
   });
 
@@ -230,6 +232,7 @@ class _SceneTagSelectorState extends State<SceneTagSelector> {
                   );
                   await DatabaseHelper.instance.insertSceneTag(tag);
                   await _loadTags();
+                  widget.onTagsChanged?.call();
                   if (mounted) {
                     Navigator.pop(context);
                   }

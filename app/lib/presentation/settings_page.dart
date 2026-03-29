@@ -1,18 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/theme.dart';
 import '../data/database.dart';
 import '../data/models.dart';
+import '../providers/theme_provider.dart';
 import 'audio_page.dart';
 import 'widgets/scene_tag_selector.dart';
 
-class SettingsPage extends StatefulWidget {
+class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
 
   @override
-  State<SettingsPage> createState() => _SettingsPageState();
+  ConsumerState<SettingsPage> createState() => _SettingsPageState();
 }
 
-class _SettingsPageState extends State<SettingsPage> {
+class _SettingsPageState extends ConsumerState<SettingsPage> {
   UserSettings _settings = UserSettings();
   List<SceneTag> _tags = [];
   bool _isLoading = true;
@@ -34,6 +36,11 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _updateSettings(UserSettings newSettings) async {
+    // 如果主题改变，同步更新 app theme
+    if (newSettings.themeMode != _settings.themeMode) {
+      ref.read(themeProvider.notifier).setThemeMode(newSettings.themeMode);
+    }
+    
     await DatabaseHelper.instance.updateSettings(newSettings);
     setState(() {
       _settings = newSettings;

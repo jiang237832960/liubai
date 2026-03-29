@@ -272,6 +272,7 @@ class _HomePageState extends State<HomePage> {
                     SceneTagSelector(
                       selectedTagId: _timerState.sceneTagId,
                       onTagSelected: _onTagSelected,
+                      onTagsChanged: _loadTags,
                       showAddButton: true,
                     ),
                   ],

@@ -71,44 +71,9 @@ class AudioService {
   WhiteNoise? _currentNoise;
   bool _isInitialized = false;
 
-  // 内置白噪音列表
-  final List<WhiteNoise> builtInNoises = [
-    WhiteNoise(
-      id: 'rain',
-      name: '雨声',
-      emoji: '🌧️',
-      type: WhiteNoiseType.rain,
-      assetPath: 'assets/audio/rain.mp3',
-    ),
-    WhiteNoise(
-      id: 'forest',
-      name: '森林',
-      emoji: '🌲',
-      type: WhiteNoiseType.forest,
-      assetPath: 'assets/audio/forest.mp3',
-    ),
-    WhiteNoise(
-      id: 'cafe',
-      name: '咖啡厅',
-      emoji: '☕',
-      type: WhiteNoiseType.cafe,
-      assetPath: 'assets/audio/cafe.mp3',
-    ),
-    WhiteNoise(
-      id: 'waves',
-      name: '海浪',
-      emoji: '🌊',
-      type: WhiteNoiseType.waves,
-      assetPath: 'assets/audio/waves.mp3',
-    ),
-    WhiteNoise(
-      id: 'fire',
-      name: '篝火',
-      emoji: '🔥',
-      type: WhiteNoiseType.fire,
-      assetPath: 'assets/audio/fire.mp3',
-    ),
-  ];
+  // 内置白噪音列表（暂时为空，需要实际音频文件）
+  // TODO: 添加实际音频文件后启用
+  final List<WhiteNoise> builtInNoises = [];
 
   // 自定义白噪音列表
   List<WhiteNoise> customNoises = [];
