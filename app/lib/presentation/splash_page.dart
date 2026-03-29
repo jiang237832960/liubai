@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/theme.dart';
+import '../data/database.dart';
 import 'home_page.dart';
 
 class SplashPage extends StatefulWidget {
@@ -32,14 +33,25 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
 
     _controller.forward();
 
-    // 2秒后跳转到首页
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const HomePage()),
-        );
-      }
-    });
+    _initializeAndNavigate();
+  }
+
+  Future<void> _initializeAndNavigate() async {
+    try {
+      await DatabaseHelper.instance.database;
+    } catch (e) {
+      // 数据库初始化错误，继续导航
+    }
+    
+    if (mounted) {
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (mounted) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (context) => const HomePage()),
+          );
+        }
+      });
+    }
   }
 
   @override

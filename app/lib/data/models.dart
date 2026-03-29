@@ -147,44 +147,47 @@ class SceneTag {
   Color get colorValue => Color(color);
 
   /// 预设标签
-  static List<SceneTag> get presets => [
-    SceneTag(
-      name: '学习',
-      color: const Color(0xFF4A90D9).value, // 蓝色
-      isDefault: true,
-      createdAt: DateTime.now(),
-    ),
-    SceneTag(
-      name: '工作',
-      color: const Color(0xFFE74C3C).value, // 红色
-      isDefault: true,
-      createdAt: DateTime.now(),
-    ),
-    SceneTag(
-      name: '阅读',
-      color: const Color(0xFF27AE60).value, // 绿色
-      isDefault: true,
-      createdAt: DateTime.now(),
-    ),
-    SceneTag(
-      name: '写作',
-      color: const Color(0xFFF39C12).value, // 橙色
-      isDefault: true,
-      createdAt: DateTime.now(),
-    ),
-    SceneTag(
-      name: '运动',
-      color: const Color(0xFF9B59B6).value, // 紫色
-      isDefault: true,
-      createdAt: DateTime.now(),
-    ),
-    SceneTag(
-      name: '冥想',
-      color: const Color(0xFF1ABC9C).value, // 青色
-      isDefault: true,
-      createdAt: DateTime.now(),
-    ),
-  ];
+  static List<SceneTag> get presets {
+    final now = DateTime.now();
+    return [
+      SceneTag(
+        name: '学习',
+        color: const Color(0xFF4A90D9).value,
+        isDefault: true,
+        createdAt: now,
+      ),
+      SceneTag(
+        name: '工作',
+        color: const Color(0xFFE74C3C).value,
+        isDefault: true,
+        createdAt: now,
+      ),
+      SceneTag(
+        name: '阅读',
+        color: const Color(0xFF27AE60).value,
+        isDefault: true,
+        createdAt: now,
+      ),
+      SceneTag(
+        name: '写作',
+        color: const Color(0xFFF39C12).value,
+        isDefault: true,
+        createdAt: now,
+      ),
+      SceneTag(
+        name: '运动',
+        color: const Color(0xFF9B59B6).value,
+        isDefault: true,
+        createdAt: now,
+      ),
+      SceneTag(
+        name: '冥想',
+        color: const Color(0xFF1ABC9C).value,
+        isDefault: true,
+        createdAt: now,
+      ),
+    ];
+  }
 }
 
 /// 每日统计模型
