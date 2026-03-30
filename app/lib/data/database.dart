@@ -856,7 +856,7 @@ class DatabaseHelper {
           COUNT(*) as total_sessions,
           SUM(CASE WHEN is_completed = 1 THEN actual_duration ELSE 0 END) as total_duration,
           SUM(CASE WHEN is_completed = 1 THEN 1 ELSE 0 END) as completed_sessions,
-          COUNT(DISTINCT datetime((start_time / 1000), 'unixepoch', 'localtime')) as active_days
+          COUNT(DISTINCT date(start_time / 1000, 'unixepoch')) as active_days
         FROM sessions
       ''');
 

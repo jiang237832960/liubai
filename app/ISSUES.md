@@ -2,23 +2,23 @@
 
 ## 待排查问题
 
-### 1. 统计问题：一天多次留白可能被统计为多天
-
-**描述**：用户反馈一天内多次留白会被统计为多天
-
-**可能原因**：
-- `getLast7DaysStats` 和 `getLast30DaysStats` 方法中按日期分组查询的逻辑可能有问题
-- 需要检查 SQL 查询的日期范围计算是否正确
-
-**状态**：待排查
-
-**相关文件**：
-- `lib/data/database.dart` - `getLast7DaysStats()` (行750-797)
-- `lib/data/database.dart` - `getLast30DaysStats()` (行799-)
+（暂无）
 
 ---
 
 ## 已修复问题记录
+
+### 9. 统计问题：一天多次留白可能被统计为多天
+
+**原因**：`getTotalStats` 中计算 `active_days` 使用的 SQLite `datetime` 函数带有 `localtime` 参数，该参数不是标准 SQLite 语法，导致跨平台兼容性问题
+
+**修复**：将 `datetime((start_time / 1000), 'unixepoch', 'localtime')` 改为 `date(start_time / 1000, 'unixepoch')`，使用标准的 `date()` 函数获取日期
+
+**相关文件**：`lib/data/database.dart` - `getTotalStats()` (行859)
+
+**提交**：`新提交`
+
+---
 
 ### 1. Android 应用名称显示为 "app"
 
