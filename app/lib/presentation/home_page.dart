@@ -4,6 +4,7 @@ import '../core/logger.dart';
 import '../core/theme.dart';
 import '../data/database.dart';
 import '../data/models.dart';
+import '../services/audio_service.dart';
 import 'log_page.dart';
 import 'settings_page.dart';
 import 'widgets/scene_tag_selector.dart';
@@ -22,12 +23,32 @@ class _HomePageState extends State<HomePage> {
   int? _currentSessionId;
   SceneTag? _selectedTag;
   List<SceneTag> _tags = [];
+  
+  final AudioService _audioService = AudioService();
+  WhiteNoise? _selectedNoise;
+  bool _isAudioInitialized = false;
 
   @override
   void initState() {
     super.initState();
     _loadSettings();
     _loadTags();
+    _initAudio();
+  }
+
+  Future<void> _initAudio() async {
+    await _audioService.initialize();
+    if (mounted) {
+      setState(() {
+        _isAudioInitialized = true;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _audioService.stop();
+    super.dispose();
   }
 
   Future<void> _loadSettings() async {
@@ -69,13 +90,6 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  @override
-  void dispose() {
-    // 不在这里取消 timer，让它在后台继续运行
-    // 计时器完成时会自动更新数据库
-    super.dispose();
-  }
-
   void _startTimerTick() {
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_timerState.remaining.inSeconds > 0) {
@@ -95,6 +109,11 @@ class _HomePageState extends State<HomePage> {
   Future<void> _startTimer() async {
     try {
       final now = DateTime.now();
+      
+      // 如果有选中音频，开始播放
+      if (_selectedNoise != null) {
+        await _audioService.play(_selectedNoise!);
+      }
       
       final session = LiubaiSession(
         startTime: now,
@@ -129,12 +148,14 @@ class _HomePageState extends State<HomePage> {
 
   void _pauseTimer() {
     _timer?.cancel();
+    _audioService.pause();
     setState(() {
       _timerState = _timerState.copyWith(status: TimerStatus.paused);
     });
   }
 
   void _resumeTimer() {
+    _audioService.resume();
     setState(() {
       _timerState = _timerState.copyWith(status: TimerStatus.running);
     });
@@ -143,6 +164,7 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _stopTimer() async {
     _timer?.cancel();
+    _audioService.stop();
     
     if (_currentSessionId != null) {
       final now = DateTime.now();
@@ -175,6 +197,7 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _completeTimer() async {
     _timer?.cancel();
+    _audioService.stop();
     
     if (_currentSessionId != null) {
       final now = DateTime.now();
@@ -299,6 +322,14 @@ class _HomePageState extends State<HomePage> {
                       onTagsChanged: _loadTags,
                       showAddButton: true,
                     ),
+                    const SizedBox(height: 24),
+                    Text(
+                      '选择音频',
+                      style: LiubaiTypography.caption,
+                    ),
+                    const SizedBox(height: 12),
+                    if (_isAudioInitialized)
+                      _buildAudioSelector(),
                   ],
                 ),
               ),
@@ -435,6 +466,90 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildAudioSelector() {
+    final noises = _audioService.builtInNoises;
+    
+    return SizedBox(
+      height: 80,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: noises.length + 1,
+        itemBuilder: (context, index) {
+          if (index == 0) {
+            return _buildAudioItem(null, '无');
+          }
+          final noise = noises[index - 1];
+          return _buildAudioItem(noise, noise.emoji);
+        },
+      ),
+    );
+  }
+
+  Widget _buildAudioItem(WhiteNoise? noise, String emoji) {
+    final isSelected = _selectedNoise?.id == noise?.id;
+    
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _selectedNoise = noise;
+        });
+        if (noise != null && _timerState.isIdle) {
+          _audioService.play(noise);
+        }
+      },
+      child: Container(
+        width: 64,
+        margin: const EdgeInsets.only(right: 12),
+        decoration: BoxDecoration(
+          color: isSelected 
+              ? LiubaiColors.inkBlack.withOpacity(0.1)
+              : LiubaiColors.liubaiWhite,
+          border: Border.all(
+            color: isSelected 
+                ? LiubaiColors.inkBlack 
+                : LiubaiColors.lightInkGray,
+            width: isSelected ? 2 : 1,
+          ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              emoji,
+              style: const TextStyle(fontSize: 24),
+            ),
+            if (noise != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                noise.name,
+                style: TextStyle(
+                  fontSize: 10,
+                  color: isSelected 
+                      ? LiubaiColors.inkBlack 
+                      : LiubaiColors.pineSmokeGray,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+            if (noise == null) ...[
+              const SizedBox(height: 4),
+              Text(
+                '无',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: isSelected 
+                      ? LiubaiColors.inkBlack 
+                      : LiubaiColors.pineSmokeGray,
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
