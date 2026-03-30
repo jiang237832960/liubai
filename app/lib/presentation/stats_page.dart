@@ -25,6 +25,12 @@ class _StatsPageState extends State<StatsPage> {
     _loadStats();
   }
 
+  @override
+  void didUpdateWidget(StatsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _loadStats();
+  }
+
   Future<void> _loadStats() async {
     setState(() => _isLoading = true);
 
@@ -65,11 +71,14 @@ class _StatsPageState extends State<StatsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    
     return Scaffold(
-      backgroundColor: LiubaiColors.liubaiWhite,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('留白统计', style: LiubaiTypography.h1),
-        backgroundColor: LiubaiColors.liubaiWhite,
+        title: Text('留白统计', style: theme.textTheme.headlineMedium),
+        backgroundColor: theme.appBarTheme.backgroundColor,
+        foregroundColor: theme.appBarTheme.foregroundColor,
         elevation: 0,
       ),
       body: _isLoading

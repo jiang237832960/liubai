@@ -26,6 +26,12 @@ class _LogPageState extends State<LogPage> {
     _loadData();
   }
 
+  @override
+  void didUpdateWidget(LogPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _loadData();
+  }
+
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
 
@@ -108,15 +114,18 @@ class _LogPageState extends State<LogPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    
     return Scaffold(
-      backgroundColor: LiubaiColors.liubaiWhite,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('留白日志', style: LiubaiTypography.h1),
-        backgroundColor: LiubaiColors.liubaiWhite,
+        title: Text('留白日志', style: theme.textTheme.headlineMedium),
+        backgroundColor: theme.appBarTheme.backgroundColor,
+        foregroundColor: theme.appBarTheme.foregroundColor,
         elevation: 0,
         actions: [
           IconButton(
-            icon: const Icon(Icons.bar_chart),
+            icon: Icon(Icons.bar_chart, color: theme.appBarTheme.foregroundColor),
             onPressed: _navigateToStats,
           ),
         ],

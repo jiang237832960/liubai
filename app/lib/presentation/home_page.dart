@@ -246,8 +246,10 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    
     return Scaffold(
-      backgroundColor: LiubaiColors.liubaiWhite,
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
         child: Column(
           children: [
@@ -402,6 +404,12 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildNavItem(String label, IconData icon, bool isSelected) {
+    final theme = Theme.of(context);
+    final selectedColor = theme.brightness == Brightness.dark 
+        ? LiubaiColors.liubaiWhite 
+        : LiubaiColors.inkBlack;
+    final unselectedColor = LiubaiColors.pineSmokeGray;
+    
     return GestureDetector(
       onTap: () {
         if (label == '日志') {
@@ -415,9 +423,7 @@ class _HomePageState extends State<HomePage> {
         children: [
           Icon(
             icon,
-            color: isSelected
-                ? LiubaiColors.inkBlack
-                : LiubaiColors.pineSmokeGray,
+            color: isSelected ? selectedColor : unselectedColor,
             size: 24,
           ),
           const SizedBox(height: 4),
@@ -425,9 +431,7 @@ class _HomePageState extends State<HomePage> {
             label,
             style: TextStyle(
               fontSize: 12,
-              color: isSelected
-                  ? LiubaiColors.inkBlack
-                  : LiubaiColors.pineSmokeGray,
+              color: isSelected ? selectedColor : unselectedColor,
             ),
           ),
         ],
