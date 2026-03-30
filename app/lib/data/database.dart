@@ -109,7 +109,6 @@ class DatabaseHelper {
   /// 初始化数据库（带损坏检测和重建）
   Future<Database> _initDB(String filePath) async {
     try {
-      // 检查存储空间
       final hasSpace = await _checkStorageSpace();
       if (!hasSpace) {
         throw const app_exceptions.DatabaseException(
@@ -120,74 +119,17 @@ class DatabaseHelper {
 
       final dbPath = await getDatabasesPath();
       final path = join(dbPath, filePath);
-      final backupPath = join(dbPath, _dbBackupName);
 
       Logger.i('初始化数据库: $path', tag: _tag);
 
-      // 尝试打开数据库
-      try {
-        final db = await openDatabase(
-          path,
-          version: 1,
-          onCreate: _createDB,
-          onOpen: (db) => Logger.i('数据库已打开', tag: _tag),
-        );
+      final db = await openDatabase(
+        path,
+        version: 1,
+        onCreate: _onCreateDB,
+        onOpen: _onOpenDB,
+      );
 
-        // 验证数据库完整性
-        final isValid = await _verifyDatabaseIntegrity(path);
-        if (isValid) {
-          // 数据库正常，创建备份
-          await _backupDatabase(path, backupPath);
-          return db;
-        } else {
-          throw Exception('数据库完整性验证失败');
-        }
-      } catch (openError) {
-        Logger.w('数据库打开失败，尝试恢复: $openError', tag: _tag);
-
-        // 尝试从备份恢复
-        final backupFile = File(backupPath);
-        if (await backupFile.exists()) {
-          try {
-            // 删除损坏的数据库
-            await _deleteCorruptedDatabase(path);
-            // 从备份恢复
-            await backupFile.copy(path);
-            Logger.i('从备份恢复数据库成功', tag: _tag);
-
-            // 重新打开恢复后的数据库
-            final db = await openDatabase(
-              path,
-              version: 1,
-              onCreate: _createDB,
-              onOpen: (db) => Logger.i('数据库已从备份恢复并打开', tag: _tag),
-            );
-
-            // 验证恢复后的数据库
-            final isValid = await _verifyDatabaseIntegrity(path);
-            if (isValid) {
-              return db;
-            } else {
-              throw Exception('备份数据库也损坏');
-            }
-          } catch (restoreError) {
-            Logger.e('从备份恢复失败: $restoreError', tag: _tag);
-          }
-        }
-
-        // 备份也失败，重新创建数据库
-        Logger.w('删除损坏数据库并重新创建', tag: _tag);
-        await _deleteCorruptedDatabase(path);
-
-        final db = await openDatabase(
-          path,
-          version: 1,
-          onCreate: _createDB,
-          onOpen: (db) => Logger.i('数据库已重新创建', tag: _tag),
-        );
-
-        return db;
-      }
+      return db;
     } on DatabaseException {
       rethrow;
     } catch (e, stackTrace) {
@@ -198,6 +140,198 @@ class DatabaseHelper {
         originalError: e,
       );
     }
+  }
+
+  /// 数据库首次创建时调用
+  Future<void> _onCreateDB(Database db, int version) async {
+    Logger.i('创建数据库表', tag: _tag);
+    await _createTables(db);
+  }
+
+  /// 数据库每次打开时调用，确保表结构完整
+  Future<void> _onOpenDB(Database db) async {
+    Logger.i('数据库已打开，检查表结构', tag: _tag);
+    await _ensureTablesExist(db);
+  }
+
+  /// 确保必要的表存在
+  Future<void> _ensureTablesExist(Database db) async {
+    try {
+      final tables = await db.rawQuery(
+        "SELECT name FROM sqlite_master WHERE type='table'",
+      );
+      final tableNames = tables.map((t) => t['name'] as String).toSet();
+
+      // 检查 scene_tags 表
+      if (!tableNames.contains('scene_tags')) {
+        Logger.i('scene_tags 表不存在，创建中', tag: _tag);
+        await db.execute('''
+          CREATE TABLE scene_tags (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            color INTEGER NOT NULL,
+            sort_order INTEGER DEFAULT 0,
+            is_default INTEGER DEFAULT 0,
+            created_at INTEGER NOT NULL
+          )
+        ''');
+      }
+
+      // 检查并插入预设标签
+      final tagCount = Sqflite.firstIntValue(
+        await db.rawQuery('SELECT COUNT(*) FROM scene_tags'),
+      );
+      if (tagCount == 0) {
+        Logger.i('插入预设标签', tag: _tag);
+        final presets = SceneTag.presets;
+        for (var i = 0; i < presets.length; i++) {
+          final tag = presets[i];
+          await db.insert('scene_tags', {
+            'name': tag.name,
+            'color': tag.color,
+            'sort_order': i,
+            'is_default': 1,
+            'created_at': DateTime.now().millisecondsSinceEpoch,
+          });
+        }
+      }
+
+      // 检查 sessions 表
+      if (!tableNames.contains('sessions')) {
+        Logger.i('sessions 表不存在，创建中', tag: _tag);
+        await db.execute('''
+          CREATE TABLE sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            start_time INTEGER NOT NULL,
+            end_time INTEGER,
+            planned_duration INTEGER NOT NULL,
+            actual_duration INTEGER,
+            is_completed INTEGER DEFAULT 0,
+            scene_tag_id INTEGER,
+            note TEXT,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            FOREIGN KEY (scene_tag_id) REFERENCES scene_tags(id) ON DELETE SET NULL
+          )
+        ''');
+      }
+
+      // 检查 settings 表
+      if (!tableNames.contains('settings')) {
+        Logger.i('settings 表不存在，创建中', tag: _tag);
+        await db.execute('''
+          CREATE TABLE settings (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            default_duration INTEGER DEFAULT 25,
+            enable_sound INTEGER DEFAULT 1,
+            enable_notification INTEGER DEFAULT 1,
+            theme_mode TEXT DEFAULT 'system',
+            default_scene_tag_id INTEGER,
+            FOREIGN KEY (default_scene_tag_id) REFERENCES scene_tags(id) ON DELETE SET NULL
+          )
+        ''');
+        
+        // 插入默认设置
+        await db.insert('settings', {
+          'id': 1,
+          'default_duration': 25,
+          'enable_sound': 1,
+          'enable_notification': 1,
+          'theme_mode': 'system',
+          'default_scene_tag_id': null,
+        });
+      }
+
+      // 检查 settings 是否有记录
+      final settingsCount = Sqflite.firstIntValue(
+        await db.rawQuery('SELECT COUNT(*) FROM settings'),
+      );
+      if (settingsCount == 0) {
+        Logger.i('插入默认设置', tag: _tag);
+        await db.insert('settings', {
+          'id': 1,
+          'default_duration': 25,
+          'enable_sound': 1,
+          'enable_notification': 1,
+          'theme_mode': 'system',
+          'default_scene_tag_id': null,
+        });
+      }
+
+      Logger.i('表结构检查完成', tag: _tag);
+    } catch (e, stackTrace) {
+      Logger.e('检查表结构失败', tag: _tag, error: e, stackTrace: stackTrace);
+    }
+  }
+
+  /// 创建所有表（仅在数据库首次创建时调用）
+  Future<void> _createTables(Database db) async {
+    // 创建 scene_tags 表
+    await db.execute('''
+      CREATE TABLE scene_tags (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        color INTEGER NOT NULL,
+        sort_order INTEGER DEFAULT 0,
+        is_default INTEGER DEFAULT 0,
+        created_at INTEGER NOT NULL
+      )
+    ''');
+
+    // 插入预设标签
+    final presets = SceneTag.presets;
+    for (var i = 0; i < presets.length; i++) {
+      final tag = presets[i];
+      await db.insert('scene_tags', {
+        'name': tag.name,
+        'color': tag.color,
+        'sort_order': i,
+        'is_default': 1,
+        'created_at': DateTime.now().millisecondsSinceEpoch,
+      });
+    }
+    Logger.i('插入预设标签成功: ${presets.length}个', tag: _tag);
+
+    // 创建 sessions 表
+    await db.execute('''
+      CREATE TABLE sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        start_time INTEGER NOT NULL,
+        end_time INTEGER,
+        planned_duration INTEGER NOT NULL,
+        actual_duration INTEGER,
+        is_completed INTEGER DEFAULT 0,
+        scene_tag_id INTEGER,
+        note TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        FOREIGN KEY (scene_tag_id) REFERENCES scene_tags(id) ON DELETE SET NULL
+      )
+    ''');
+
+    // 创建 settings 表
+    await db.execute('''
+      CREATE TABLE settings (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        default_duration INTEGER DEFAULT 25,
+        enable_sound INTEGER DEFAULT 1,
+        enable_notification INTEGER DEFAULT 1,
+        theme_mode TEXT DEFAULT 'system',
+        default_scene_tag_id INTEGER,
+        FOREIGN KEY (default_scene_tag_id) REFERENCES scene_tags(id) ON DELETE SET NULL
+      )
+    ''');
+
+    // 插入默认设置
+    await db.insert('settings', {
+      'id': 1,
+      'default_duration': 25,
+      'enable_sound': 1,
+      'enable_notification': 1,
+      'theme_mode': 'system',
+      'default_scene_tag_id': null,
+    });
+    Logger.i('数据库表创建完成', tag: _tag);
   }
 
   /// 检查数据库健康状态
@@ -272,90 +406,6 @@ class DatabaseHelper {
       throw app_exceptions.DatabaseException(
         '数据库修复失败: $e',
         code: 'DB_REPAIR_ERROR',
-        originalError: e,
-      );
-    }
-  }
-
-  /// 创建数据库表
-  Future _createDB(Database db, int version) async {
-    try {
-      Logger.i('创建数据库表', tag: _tag);
-
-      // 创建场景标签表
-      await db.execute('''
-        CREATE TABLE scene_tags (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          name TEXT NOT NULL,
-          color INTEGER NOT NULL,
-          sort_order INTEGER DEFAULT 0,
-          is_default INTEGER DEFAULT 0,
-          created_at INTEGER NOT NULL
-        )
-      ''');
-      Logger.i('创建 scene_tags 表成功', tag: _tag);
-
-      // 插入预设标签
-      final presets = SceneTag.presets;
-      for (var i = 0; i < presets.length; i++) {
-        final tag = presets[i];
-        await db.insert('scene_tags', {
-          'name': tag.name,
-          'color': tag.color,
-          'sort_order': i,
-          'is_default': 1,
-          'created_at': DateTime.now().millisecondsSinceEpoch,
-        });
-      }
-      Logger.i('插入预设标签成功: ${presets.length}个', tag: _tag);
-
-      // 创建留白会话表
-      await db.execute('''
-        CREATE TABLE sessions (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          start_time INTEGER NOT NULL,
-          end_time INTEGER,
-          planned_duration INTEGER NOT NULL,
-          actual_duration INTEGER,
-          is_completed INTEGER DEFAULT 0,
-          scene_tag_id INTEGER,
-          note TEXT,
-          created_at INTEGER NOT NULL,
-          updated_at INTEGER NOT NULL,
-          FOREIGN KEY (scene_tag_id) REFERENCES scene_tags(id) ON DELETE SET NULL
-        )
-      ''');
-      Logger.i('创建 sessions 表成功', tag: _tag);
-
-      // 创建用户设置表
-      await db.execute('''
-        CREATE TABLE settings (
-          id INTEGER PRIMARY KEY CHECK (id = 1),
-          default_duration INTEGER DEFAULT 25,
-          enable_sound INTEGER DEFAULT 1,
-          enable_notification INTEGER DEFAULT 1,
-          theme_mode TEXT DEFAULT 'system',
-          default_scene_tag_id INTEGER,
-          FOREIGN KEY (default_scene_tag_id) REFERENCES scene_tags(id) ON DELETE SET NULL
-        )
-      ''');
-      Logger.i('创建 settings 表成功', tag: _tag);
-
-      // 插入默认设置
-      await db.insert('settings', {
-        'id': 1,
-        'default_duration': 25,
-        'enable_sound': 1,
-        'enable_notification': 1,
-        'theme_mode': 'system',
-        'default_scene_tag_id': null,
-      });
-      Logger.i('插入默认设置成功', tag: _tag);
-    } catch (e, stackTrace) {
-      Logger.e('创建数据库表失败', tag: _tag, error: e, stackTrace: stackTrace);
-      throw app_exceptions.DatabaseException(
-        '创建数据库表失败',
-        code: 'DB_CREATE_ERROR',
         originalError: e,
       );
     }
