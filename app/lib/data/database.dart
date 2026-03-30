@@ -827,9 +827,10 @@ class DatabaseHelper {
         final startOfDay = DateTime(date.year, date.month, date.day);
         final endOfDay = startOfDay.add(const Duration(days: 1));
 
-        final maps = await db.query(
+        // 统计总时长（只统计完成的）
+        final totalMaps = await db.query(
           'sessions',
-          where: 'start_time >= ? AND start_time < ? AND is_completed = 1',
+          where: 'start_time >= ? AND start_time < ?',
           whereArgs: [
             startOfDay.millisecondsSinceEpoch,
             endOfDay.millisecondsSinceEpoch,
@@ -838,17 +839,19 @@ class DatabaseHelper {
 
         int totalDuration = 0;
         int completedCount = 0;
-        for (var map in maps) {
+        for (var map in totalMaps) {
           final actualDuration = (map['actual_duration'] as int?) ?? 0;
           final isCompleted = map['is_completed'] == 1;
-          totalDuration += actualDuration;
+          if (isCompleted) {
+            totalDuration += actualDuration;
+          }
           if (isCompleted) completedCount++;
         }
 
         stats.add(DailyStats(
           date: date.toIso8601String().split('T')[0],
           totalDuration: totalDuration,
-          sessionCount: maps.length,
+          sessionCount: totalMaps.length,
           completedCount: completedCount,
         ));
       }
@@ -877,9 +880,10 @@ class DatabaseHelper {
         final startOfDay = DateTime(date.year, date.month, date.day);
         final endOfDay = startOfDay.add(const Duration(days: 1));
 
-        final maps = await db.query(
+        // 统计总时长（只统计完成的）
+        final totalMaps = await db.query(
           'sessions',
-          where: 'start_time >= ? AND start_time < ? AND is_completed = 1',
+          where: 'start_time >= ? AND start_time < ?',
           whereArgs: [
             startOfDay.millisecondsSinceEpoch,
             endOfDay.millisecondsSinceEpoch,
@@ -888,17 +892,19 @@ class DatabaseHelper {
 
         int totalDuration = 0;
         int completedCount = 0;
-        for (var map in maps) {
+        for (var map in totalMaps) {
           final actualDuration = (map['actual_duration'] as int?) ?? 0;
           final isCompleted = map['is_completed'] == 1;
-          totalDuration += actualDuration;
+          if (isCompleted) {
+            totalDuration += actualDuration;
+          }
           if (isCompleted) completedCount++;
         }
 
         stats.add(DailyStats(
           date: date.toIso8601String().split('T')[0],
           totalDuration: totalDuration,
-          sessionCount: maps.length,
+          sessionCount: totalMaps.length,
           completedCount: completedCount,
         ));
       }
@@ -927,6 +933,7 @@ class DatabaseHelper {
           SUM(CASE WHEN is_completed = 1 THEN 1 ELSE 0 END) as completed_sessions,
           COUNT(DISTINCT date(start_time / 1000, 'unixepoch')) as active_days
         FROM sessions
+        WHERE is_completed = 1
       ''');
 
       if (result.isNotEmpty) {
