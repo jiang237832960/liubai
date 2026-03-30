@@ -534,8 +534,11 @@ class DatabaseHelper {
       int completedCount = 0;
 
       for (var session in sessions) {
-        if (session.isCompleted && session.actualDuration != null) {
+        // 统计所有session的实际时长，无论是否完成
+        if (session.actualDuration != null) {
           totalDuration += session.actualDuration!;
+        }
+        if (session.isCompleted) {
           completedCount++;
         }
       }
@@ -782,13 +785,14 @@ class DatabaseHelper {
   Future<List<Map<String, dynamic>>> getTagDistribution() async {
     try {
       final db = await database;
+      // 统计所有session的实际时长，无论是否完成
       final result = await db.rawQuery('''
         SELECT 
           st.id,
           st.name,
           st.color,
           COUNT(s.id) as session_count,
-          SUM(CASE WHEN s.is_completed = 1 THEN s.actual_duration ELSE 0 END) as total_duration
+          SUM(COALESCE(s.actual_duration, 0)) as total_duration
         FROM scene_tags st
         LEFT JOIN sessions s ON st.id = s.scene_tag_id
         GROUP BY st.id
@@ -827,8 +831,7 @@ class DatabaseHelper {
         final startOfDay = DateTime(date.year, date.month, date.day);
         final endOfDay = startOfDay.add(const Duration(days: 1));
 
-        // 统计总时长（只统计完成的）
-        final totalMaps = await db.query(
+        final maps = await db.query(
           'sessions',
           where: 'start_time >= ? AND start_time < ?',
           whereArgs: [
@@ -839,19 +842,18 @@ class DatabaseHelper {
 
         int totalDuration = 0;
         int completedCount = 0;
-        for (var map in totalMaps) {
+        for (var map in maps) {
           final actualDuration = (map['actual_duration'] as int?) ?? 0;
           final isCompleted = map['is_completed'] == 1;
-          if (isCompleted) {
-            totalDuration += actualDuration;
-          }
+          // 统计所有session的实际时长，无论是否完成
+          totalDuration += actualDuration;
           if (isCompleted) completedCount++;
         }
 
         stats.add(DailyStats(
           date: date.toIso8601String().split('T')[0],
           totalDuration: totalDuration,
-          sessionCount: totalMaps.length,
+          sessionCount: maps.length,
           completedCount: completedCount,
         ));
       }
@@ -880,8 +882,7 @@ class DatabaseHelper {
         final startOfDay = DateTime(date.year, date.month, date.day);
         final endOfDay = startOfDay.add(const Duration(days: 1));
 
-        // 统计总时长（只统计完成的）
-        final totalMaps = await db.query(
+        final maps = await db.query(
           'sessions',
           where: 'start_time >= ? AND start_time < ?',
           whereArgs: [
@@ -892,19 +893,18 @@ class DatabaseHelper {
 
         int totalDuration = 0;
         int completedCount = 0;
-        for (var map in totalMaps) {
+        for (var map in maps) {
           final actualDuration = (map['actual_duration'] as int?) ?? 0;
           final isCompleted = map['is_completed'] == 1;
-          if (isCompleted) {
-            totalDuration += actualDuration;
-          }
+          // 统计所有session的实际时长，无论是否完成
+          totalDuration += actualDuration;
           if (isCompleted) completedCount++;
         }
 
         stats.add(DailyStats(
           date: date.toIso8601String().split('T')[0],
           totalDuration: totalDuration,
-          sessionCount: totalMaps.length,
+          sessionCount: maps.length,
           completedCount: completedCount,
         ));
       }
@@ -926,14 +926,14 @@ class DatabaseHelper {
     try {
       final db = await database;
 
+      // 统计所有session的实际时长，无论是否完成
       final result = await db.rawQuery('''
         SELECT 
           COUNT(*) as total_sessions,
-          SUM(CASE WHEN is_completed = 1 THEN actual_duration ELSE 0 END) as total_duration,
+          SUM(COALESCE(actual_duration, 0)) as total_duration,
           SUM(CASE WHEN is_completed = 1 THEN 1 ELSE 0 END) as completed_sessions,
           COUNT(DISTINCT date(start_time / 1000, 'unixepoch')) as active_days
         FROM sessions
-        WHERE is_completed = 1
       ''');
 
       if (result.isNotEmpty) {

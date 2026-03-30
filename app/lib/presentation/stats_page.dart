@@ -334,6 +334,8 @@ class _StatsPageState extends State<StatsPage> {
 
   Widget _buildTrendChart() {
     final stats = _selectedTab == 0 ? _weekStats : _monthStats;
+    final isWeek = _selectedTab == 0;
+    final barWidth = isWeek ? 36.0 : 12.0;
 
     if (stats.isEmpty || stats.every((s) => s.totalDuration == 0)) {
       return Container(
@@ -350,10 +352,10 @@ class _StatsPageState extends State<StatsPage> {
     }
 
     final maxDuration = stats.map((s) => s.totalDuration).reduce((a, b) => a > b ? a : b);
-    final maxHeight = 150.0;
+    final maxHeight = 120.0;
 
     return Container(
-      height: 250,
+      height: 220,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: LiubaiColors.liubaiWhite,
@@ -364,20 +366,21 @@ class _StatsPageState extends State<StatsPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            _selectedTab == 0 ? '近7天趋势' : '近30天趋势',
+            isWeek ? '近7天趋势' : '近30天趋势',
             style: LiubaiTypography.body,
           ),
           const SizedBox(height: 16),
           Expanded(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: stats.map((stat) {
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: stats.length,
+              itemBuilder: (context, index) {
+                final stat = stats[index];
                 final height = maxDuration > 0
                     ? (stat.totalDuration / maxDuration) * maxHeight
                     : 0.0;
-                return _buildBar(stat, height, maxHeight);
-              }).toList(),
+                return _buildBar(stat, height, maxHeight, barWidth, isWeek);
+              },
             ),
           ),
         ],
@@ -385,48 +388,51 @@ class _StatsPageState extends State<StatsPage> {
     );
   }
 
-  Widget _buildBar(DailyStats stat, double height, double maxHeight) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.end,
-      children: [
-        // 时长标签
-        if (stat.totalDuration > 0)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 4),
-            child: Text(
-              stat.totalDuration >= 60
-                  ? '${stat.totalDuration ~/ 60}h'
-                  : '${stat.totalDuration}m',
-              style: const TextStyle(
-                fontSize: 10,
-                color: LiubaiColors.pineSmokeGray,
+  Widget _buildBar(DailyStats stat, double height, double maxHeight, double barWidth, bool isWeek) {
+    return SizedBox(
+      width: barWidth + 8,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          // 时长标签
+          if (stat.totalDuration > 0)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                stat.totalDuration >= 60
+                    ? '${stat.totalDuration ~/ 60}h'
+                    : '${stat.totalDuration}m',
+                style: const TextStyle(
+                  fontSize: 9,
+                  color: LiubaiColors.pineSmokeGray,
+                ),
               ),
+            ),
+
+          // 柱状图
+          Container(
+            width: barWidth,
+            height: height > 0 ? height : 4,
+            decoration: BoxDecoration(
+              color: stat.totalDuration > 0
+                  ? LiubaiColors.inkBlack
+                  : LiubaiColors.lightInkGray,
+              borderRadius: BorderRadius.circular(2),
             ),
           ),
 
-        // 柱状图
-        Container(
-          width: _selectedTab == 0 ? 24 : 8,
-          height: height > 0 ? height : 4,
-          decoration: BoxDecoration(
-            color: stat.totalDuration > 0
-                ? LiubaiColors.inkBlack
-                : LiubaiColors.lightInkGray,
-            borderRadius: BorderRadius.circular(2),
-          ),
-        ),
+          const SizedBox(height: 8),
 
-        const SizedBox(height: 8),
-
-        // 日期标签
-        Text(
-          _formatShortDate(stat.date),
-          style: const TextStyle(
-            fontSize: 10,
-            color: LiubaiColors.pineSmokeGray,
+          // 日期标签
+          Text(
+            _formatShortDate(stat.date),
+            style: const TextStyle(
+              fontSize: 9,
+              color: LiubaiColors.pineSmokeGray,
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
