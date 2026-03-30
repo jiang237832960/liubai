@@ -4,7 +4,6 @@ import '../core/logger.dart';
 import '../core/theme.dart';
 import '../core/utils.dart';
 import '../data/database.dart';
-import '../data/models.dart';
 import '../data/models/scene_template.dart';
 import '../services/audio_service.dart';
 import '../services/template_service.dart';
@@ -37,16 +36,16 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    _initialize();
+    _init();
   }
 
-  Future<void> _initialize() async {
+  Future<void> _init() async {
     await _audioService.initialize();
     await _loadTemplates();
-    _setupTimelineCallbacks();
+    _setupCallbacks();
   }
 
-  void _setupTimelineCallbacks() {
+  void _setupCallbacks() {
     _timelineEngine.onTick = (state) {
       if (mounted) {
         setState(() {
@@ -64,7 +63,7 @@ class _HomePageState extends State<HomePage> {
           _currentCycle = state.currentCycle;
           _elapsedMs = state.elapsedMs;
           _timelineStatus = state.status;
-          _activeTemplate = state.template;
+          _activeTemplate = _timelineEngine.template;
           _totalCycles = state.totalCycles;
         });
         _audioService.stop();
@@ -73,9 +72,7 @@ class _HomePageState extends State<HomePage> {
 
     _timelineEngine.onComplete = (state) {
       if (mounted) {
-        setState(() {
-          _timelineStatus = TimelineStatus.completed;
-        });
+        setState(() => _timelineStatus = TimelineStatus.completed);
         _audioService.stop();
       }
     };
@@ -91,12 +88,8 @@ class _HomePageState extends State<HomePage> {
         });
       }
     } catch (e) {
-      Logger.e('加载模板失败', tag: 'HomePage', error: e);
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      Logger.e('加载模板失败', tag: 'HomePage');
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -109,30 +102,61 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
-      body: SafeArea(
-        child: _timelineStatus == TimelineStatus.idle
-            ? _buildIdleView()
-            : _buildRunningView(),
-      ),
+      backgroundColor: LiubaiColors.liubaiWhite,
+      body: _timelineStatus == TimelineStatus.idle
+          ? _buildIdleView()
+          : _buildRunningView(),
     );
   }
 
   Widget _buildIdleView() {
-    return Column(
-      children: [
-        Expanded(
-          child: _isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : _templates.isEmpty
-                  ? _buildEmptyState()
-                  : _buildTemplateList(),
-        ),
-        _buildBottomNav(),
-      ],
+    return SafeArea(
+      child: Column(
+        children: [
+          _buildHeader(),
+          Expanded(child: _buildContent()),
+          _buildBottomNav(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Text('留白', style: LiubaiTypography.h1),
+          IconButton(
+            icon: const Icon(Icons.add_circle_outline),
+            onPressed: _createTemplate,
+            color: LiubaiColors.pineSmokeGray,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildContent() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_templates.isEmpty) {
+      return _buildEmptyState();
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      itemCount: _templates.length + 1,
+      itemBuilder: (context, index) {
+        if (index == _templates.length) {
+          return const SizedBox(height: 100);
+        }
+        return _buildTemplateItem(_templates[index]);
+      },
     );
   }
 
@@ -142,58 +166,41 @@ class _HomePageState extends State<HomePage> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
-            Icons.add_circle_outline,
-            size: 64,
-            color: LiubaiColors.pineSmokeGray,
+            Icons.spa_outlined,
+            size: 48,
+            color: LiubaiColors.lightInkGray,
           ),
           const SizedBox(height: 16),
-          const Text(
-            '创建你的第一个专注场景',
-            style: LiubaiTypography.body,
+          Text(
+            '创建你的专注场景',
+            style: LiubaiTypography.caption,
           ),
           const SizedBox(height: 24),
-          ElevatedButton.icon(
+          TextButton(
             onPressed: _createTemplate,
-            icon: const Icon(Icons.add),
-            label: const Text('创建场景'),
+            child: const Text('+ 创建场景'),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildTemplateList() {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        const Text('选择场景开始专注', style: LiubaiTypography.caption),
-        const SizedBox(height: 16),
-        ..._templates.map((t) => _buildTemplateCard(t)),
-        const SizedBox(height: 16),
-        _buildAddTemplateCard(),
-      ],
-    );
-  }
-
-  Widget _buildTemplateCard(SceneTemplate template) {
-    final workMinutes = template.workDurationMs ~/ 60000;
-    final restMinutes = template.restDurationMs ~/ 60000;
-    final totalMinutes = (workMinutes + restMinutes) * template.cycles;
+  Widget _buildTemplateItem(SceneTemplate template) {
+    final totalMinutes = template.totalDurationMs ~/ 60000;
 
     return GestureDetector(
       onTap: () => _startTemplate(template),
-      onLongPress: () => _showTemplateOptions(template),
+      onLongPress: () => _showOptions(template),
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: LiubaiColors.liubaiWhite,
           border: Border.all(color: LiubaiColors.lightInkGray),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
           children: [
-            Text(template.emoji, style: const TextStyle(fontSize: 40)),
+            Text(template.emoji, style: const TextStyle(fontSize: 32)),
             const SizedBox(width: 16),
             Expanded(
               child: Column(
@@ -202,49 +209,15 @@ class _HomePageState extends State<HomePage> {
                   Text(template.name, style: LiubaiTypography.body),
                   const SizedBox(height: 4),
                   Text(
-                    '${template.cycles}轮 · ${workMinutes}分钟工作 · ${restMinutes}分钟休息',
-                    style: LiubaiTypography.caption,
-                  ),
-                  Text(
-                    '总时长约 ${totalMinutes}分钟',
+                    '${template.cycles}轮 · ${template.workDurationMs ~/ 60000}分钟/轮',
                     style: LiubaiTypography.caption,
                   ),
                 ],
               ),
             ),
-            IconButton(
-              onPressed: () => _editTemplate(template),
-              icon: const Icon(Icons.edit_outlined),
+            const Icon(
+              Icons.play_circle_outline,
               color: LiubaiColors.pineSmokeGray,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAddTemplateCard() {
-    return GestureDetector(
-      onTap: _createTemplate,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          border: Border.all(
-            color: LiubaiColors.lightInkGray,
-            width: 1,
-          ),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.add, color: LiubaiColors.pineSmokeGray),
-            const SizedBox(width: 8),
-            Text(
-              '创建新场景',
-              style: LiubaiTypography.body.copyWith(
-                color: LiubaiColors.pineSmokeGray,
-              ),
             ),
           ],
         ),
@@ -254,91 +227,88 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildRunningView() {
     final template = _activeTemplate!;
-    final workMinutes = template.workDurationMs ~/ 60000;
-    final restMinutes = template.restDurationMs ~/ 60000;
-    final phaseMs = _currentSegmentType == SegmentType.work 
-        ? template.workDurationMs 
+    final phaseMs = _currentSegmentType == SegmentType.work
+        ? template.workDurationMs
         : template.restDurationMs;
+    final cyclePos = _elapsedMs % (template.workDurationMs + template.restDurationMs);
     final phaseElapsed = _currentSegmentType == SegmentType.work
-        ? _elapsedMs % (template.workDurationMs + template.restDurationMs)
-        : (_elapsedMs - template.workDurationMs) % (template.workDurationMs + template.restDurationMs);
-    
+        ? cyclePos
+        : (cyclePos - template.workDurationMs).clamp(0, template.restDurationMs);
     final progress = phaseMs > 0 ? phaseElapsed / phaseMs : 0.0;
+    final remaining = phaseMs - phaseElapsed;
+    final minutes = remaining ~/ 60000;
+    final seconds = (remaining % 60000) ~/ 1000;
 
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          children: [
-            Text(
-              template.emoji,
-              style: const TextStyle(fontSize: 48),
-            ),
-            const SizedBox(height: 8),
-            Text(template.name, style: LiubaiTypography.h2),
-            const SizedBox(height: 8),
-            Text(
-              '第$_currentCycle / $_totalCycles 轮',
-              style: LiubaiTypography.caption,
-            ),
-            const SizedBox(height: 32),
-            
-            Expanded(
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
+    return Scaffold(
+      backgroundColor: LiubaiColors.liubaiWhite,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(template.emoji, style: const TextStyle(fontSize: 20)),
+                  Text(template.name, style: LiubaiTypography.body),
+                  Text(
+                    '${_currentSegmentType == SegmentType.work ? '专注' : '休息'} · ${_currentCycle}/$_totalCycles',
+                    style: LiubaiTypography.caption,
+                  ),
+                ],
+              ),
+              const Spacer(),
+              SizedBox(
+                width: 240,
+                height: 240,
+                child: Stack(
+                  alignment: Alignment.center,
                   children: [
-                    Stack(
-                      alignment: Alignment.center,
+                    CircularProgressIndicator(
+                      value: progress,
+                      strokeWidth: 2,
+                      backgroundColor: LiubaiColors.lightInkGray.withOpacity(0.3),
+                      valueColor: AlwaysStoppedAnimation(LiubaiColors.inkBlack),
+                    ),
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        SizedBox(
-                          width: 200,
-                          height: 200,
-                          child: CircularProgressIndicator(
-                            value: progress,
-                            strokeWidth: 8,
-                            backgroundColor: LiubaiColors.lightInkGray,
-                            valueColor: AlwaysStoppedAnimation(
-                              _currentSegmentType == SegmentType.work
-                                  ? LiubaiColors.inkBlack
-                                  : LiubaiColors.cinnabarRed,
-                            ),
+                        Text(
+                          '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}',
+                          style: const TextStyle(
+                            fontSize: 48,
+                            fontWeight: FontWeight.w200,
+                            letterSpacing: 4,
                           ),
                         ),
-                        Column(
-                          children: [
-                            Text(
-                              _currentSegmentType == SegmentType.work ? '专注' : '休息',
-                              style: LiubaiTypography.caption,
-                            ),
-                            Text(
-                              FormatUtils.formatDuration((phaseMs - phaseElapsed) ~/ 60000),
-                              style: LiubaiTypography.timer,
-                            ),
-                          ],
+                        const SizedBox(height: 8),
+                        Text(
+                          _currentSegmentType == SegmentType.work ? '专注中' : '休息中',
+                          style: LiubaiTypography.caption,
                         ),
                       ],
                     ),
                   ],
                 ),
               ),
-            ),
-            
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                TextButton(
-                  onPressed: _pauseTemplate,
-                  child: Text(_timelineStatus == TimelineStatus.running ? '暂停' : '继续'),
-                ),
-                const SizedBox(width: 32),
-                TextButton(
-                  onPressed: _stopTemplate,
-                  child: const Text('结束'),
-                ),
-              ],
-            ),
-          ],
+              const Spacer(),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  TextButton(
+                    onPressed: _pauseTemplate,
+                    child: Text(_timelineStatus == TimelineStatus.running ? '暂停' : '继续'),
+                  ),
+                  const SizedBox(width: 48),
+                  TextButton(
+                    onPressed: _stopTemplate,
+                    child: const Text('结束'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 32),
+            ],
+          ),
         ),
       ),
     );
@@ -346,11 +316,11 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildBottomNav() {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16),
+      padding: const EdgeInsets.all(16),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _buildNavItem('场景', Icons.circle_outlined, true),
+          _buildNavItem('场景', Icons.spa_outlined, true),
           _buildNavItem('日志', Icons.menu_book_outlined, false),
           _buildNavItem('设置', Icons.settings_outlined, false),
         ],
@@ -359,10 +329,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildNavItem(String label, IconData icon, bool isSelected) {
-    final theme = Theme.of(context);
-    final color = isSelected
-        ? LiubaiColors.inkBlack
-        : LiubaiColors.pineSmokeGray;
+    final color = isSelected ? LiubaiColors.inkBlack : LiubaiColors.pineSmokeGray;
 
     return GestureDetector(
       onTap: () {
@@ -383,7 +350,10 @@ class _HomePageState extends State<HomePage> {
         children: [
           Icon(icon, color: color, size: 24),
           const SizedBox(height: 4),
-          Text(label, style: TextStyle(fontSize: 12, color: color)),
+          Text(
+            label,
+            style: TextStyle(fontSize: 12, color: color),
+          ),
         ],
       ),
     );
@@ -394,25 +364,12 @@ class _HomePageState extends State<HomePage> {
       context,
       MaterialPageRoute(builder: (_) => const TemplateEditorPage()),
     );
-    if (result != null) {
-      _loadTemplates();
-    }
-  }
-
-  void _editTemplate(SceneTemplate template) async {
-    final result = await Navigator.push<SceneTemplate>(
-      context,
-      MaterialPageRoute(builder: (_) => TemplateEditorPage(template: template)),
-    );
-    if (result != null) {
-      _loadTemplates();
-    }
+    if (result != null) _loadTemplates();
   }
 
   void _startTemplate(SceneTemplate template) async {
     _timelineEngine.loadTemplate(template);
     await _timelineEngine.start();
-    
     setState(() {
       _activeTemplate = template;
       _timelineStatus = TimelineStatus.running;
@@ -440,17 +397,16 @@ class _HomePageState extends State<HomePage> {
   void _stopTemplate() async {
     await _timelineEngine.stop();
     await _audioService.stop();
-    
     setState(() {
       _activeTemplate = null;
       _timelineStatus = TimelineStatus.idle;
     });
   }
 
-  void _showTemplateOptions(SceneTemplate template) {
+  void _showOptions(SceneTemplate template) {
     showModalBottomSheet(
       context: context,
-      builder: (context) => SafeArea(
+      builder: (ctx) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -458,16 +414,21 @@ class _HomePageState extends State<HomePage> {
               leading: const Icon(Icons.edit),
               title: const Text('编辑'),
               onTap: () {
-                Navigator.pop(context);
-                _editTemplate(template);
+                Navigator.pop(ctx);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => TemplateEditorPage(template: template),
+                  ),
+                ).then((r) => _loadTemplates());
               },
             ),
             ListTile(
               leading: const Icon(Icons.delete, color: LiubaiColors.cinnabarRed),
-              title: const Text('删除', style: TextStyle(color: LiubaiColors.cinnabarRed)),
+              title: Text('删除', style: TextStyle(color: LiubaiColors.cinnabarRed)),
               onTap: () async {
-                Navigator.pop(context);
-                final confirmed = await showDialog<bool>(
+                Navigator.pop(ctx);
+                final confirm = await showDialog<bool>(
                   context: context,
                   builder: (ctx) => AlertDialog(
                     title: const Text('确认删除'),
@@ -484,7 +445,7 @@ class _HomePageState extends State<HomePage> {
                     ],
                   ),
                 );
-                if (confirmed == true) {
+                if (confirm == true) {
                   await _templateService.deleteTemplate(template.id);
                   _loadTemplates();
                 }
