@@ -2,8 +2,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../core/logger.dart';
 import '../core/theme.dart';
+import '../core/utils.dart';
 import '../data/database.dart';
 import '../data/models.dart';
+import '../data/models/scene_template.dart';
 import '../services/audio_service.dart';
 import 'log_page.dart';
 import 'settings_page.dart';
@@ -25,29 +27,38 @@ class _HomePageState extends State<HomePage> {
   List<SceneTag> _tags = [];
   
   final AudioService _audioService = AudioService();
-  WhiteNoise? _selectedNoise;
+  SoundSource? _selectedAudioSource;
   bool _isAudioInitialized = false;
 
   @override
   void initState() {
     super.initState();
+    _initialize();
+  }
+
+  Future<void> _initialize() async {
     _loadSettings();
     _loadTags();
-    _initAudio();
+    await _initAudio();
   }
 
   Future<void> _initAudio() async {
-    await _audioService.initialize();
-    if (mounted) {
-      setState(() {
-        _isAudioInitialized = true;
-      });
+    try {
+      await _audioService.initialize();
+      if (mounted) {
+        setState(() {
+          _isAudioInitialized = true;
+        });
+      }
+    } catch (e, stackTrace) {
+      Logger.e('音频初始化失败', tag: 'HomePage', error: e, stackTrace: stackTrace);
     }
   }
 
   @override
   void dispose() {
-    _audioService.stop();
+    _timer?.cancel();
+    _audioService.dispose();
     super.dispose();
   }
 
@@ -57,8 +68,6 @@ class _HomePageState extends State<HomePage> {
       if (mounted) {
         setState(() {
           _defaultDuration = settings.defaultDuration;
-          // 只有在计时器空闲时才重置 timerState
-          // 避免重置正在运行或已暂停的计时器
           if (_timerState.isIdle) {
             _timerState = TimerState(
               total: Duration(minutes: settings.defaultDuration),
@@ -68,29 +77,32 @@ class _HomePageState extends State<HomePage> {
           }
         });
       }
-    } catch (e) {
-      Logger.e('加载设置失败', error: e);
+    } catch (e, stackTrace) {
+      Logger.e('加载设置失败', tag: 'HomePage', error: e, stackTrace: stackTrace);
     }
   }
 
   Future<void> _loadTags() async {
     try {
       final tags = await DatabaseHelper.instance.getAllSceneTags();
-      setState(() {
-        _tags = tags;
-        if (_timerState.sceneTagId != null) {
-          _selectedTag = tags.firstWhere(
-            (tag) => tag.id == _timerState.sceneTagId,
-            orElse: () => tags.first,
-          );
-        }
-      });
-    } catch (e) {
-      Logger.e('加载标签失败', error: e);
+      if (mounted) {
+        setState(() {
+          _tags = tags;
+          if (_timerState.sceneTagId != null) {
+            _selectedTag = tags.firstWhere(
+              (tag) => tag.id == _timerState.sceneTagId,
+              orElse: () => tags.first,
+            );
+          }
+        });
+      }
+    } catch (e, stackTrace) {
+      Logger.e('加载标签失败', tag: 'HomePage', error: e, stackTrace: stackTrace);
     }
   }
 
   void _startTimerTick() {
+    _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_timerState.remaining.inSeconds > 0) {
         setState(() {
@@ -110,9 +122,8 @@ class _HomePageState extends State<HomePage> {
     try {
       final now = DateTime.now();
       
-      // 如果有选中音频，开始播放
-      if (_selectedNoise != null) {
-        await _audioService.play(_selectedNoise!);
+      if (_selectedAudioSource != null) {
+        await _audioService.playSingle(_selectedAudioSource!);
       }
       
       final session = LiubaiSession(
@@ -136,8 +147,8 @@ class _HomePageState extends State<HomePage> {
       });
 
       _startTimerTick();
-    } catch (e) {
-      Logger.e('开始留白失败', error: e);
+    } catch (e, stackTrace) {
+      Logger.e('开始留白失败', tag: 'HomePage', error: e, stackTrace: stackTrace);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('开始留白失败: $e')),
@@ -149,22 +160,26 @@ class _HomePageState extends State<HomePage> {
   void _pauseTimer() {
     _timer?.cancel();
     _audioService.pause();
-    setState(() {
-      _timerState = _timerState.copyWith(status: TimerStatus.paused);
-    });
+    if (mounted) {
+      setState(() {
+        _timerState = _timerState.copyWith(status: TimerStatus.paused);
+      });
+    }
   }
 
   void _resumeTimer() {
     _audioService.resume();
-    setState(() {
-      _timerState = _timerState.copyWith(status: TimerStatus.running);
-    });
+    if (mounted) {
+      setState(() {
+        _timerState = _timerState.copyWith(status: TimerStatus.running);
+      });
+    }
     _startTimerTick();
   }
 
   Future<void> _stopTimer() async {
     _timer?.cancel();
-    _audioService.stop();
+    await _audioService.stop();
     
     if (_currentSessionId != null) {
       final now = DateTime.now();
@@ -185,19 +200,21 @@ class _HomePageState extends State<HomePage> {
       await DatabaseHelper.instance.updateSession(session);
     }
     
-    setState(() {
-      _currentSessionId = null;
-      _timerState = TimerState(
-        total: Duration(minutes: _defaultDuration),
-        remaining: Duration(minutes: _defaultDuration),
-        sceneTagId: _timerState.sceneTagId,
-      );
-    });
+    if (mounted) {
+      setState(() {
+        _currentSessionId = null;
+        _timerState = TimerState(
+          total: Duration(minutes: _defaultDuration),
+          remaining: Duration(minutes: _defaultDuration),
+          sceneTagId: _timerState.sceneTagId,
+        );
+      });
+    }
   }
 
   Future<void> _completeTimer() async {
     _timer?.cancel();
-    _audioService.stop();
+    await _audioService.stop();
     
     if (_currentSessionId != null) {
       final now = DateTime.now();
@@ -217,9 +234,11 @@ class _HomePageState extends State<HomePage> {
       await DatabaseHelper.instance.updateSession(session);
     }
     
-    setState(() {
-      _timerState = _timerState.copyWith(status: TimerStatus.completed);
-    });
+    if (mounted) {
+      setState(() {
+        _timerState = _timerState.copyWith(status: TimerStatus.completed);
+      });
+    }
   }
 
   void _onTagSelected(int? tagId) {
@@ -298,7 +317,7 @@ class _HomePageState extends State<HomePage> {
                   ),
                   if (_selectedTag != null) ...[
                     const SizedBox(height: 16),
-                    SceneTagChip(tag: _selectedTag),
+                    SceneTagChip(tag: _selectedTag!),
                   ],
                 ],
               ),
@@ -398,7 +417,7 @@ class _HomePageState extends State<HomePage> {
           ),
           if (_selectedTag != null) ...[
             const SizedBox(height: 8),
-            SceneTagChip(tag: _selectedTag),
+            SceneTagChip(tag: _selectedTag!),
           ],
           const SizedBox(height: 32),
           ElevatedButton(
@@ -471,34 +490,34 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildAudioSelector() {
-    final noises = _audioService.builtInNoises;
+    final audioSources = BuiltInAudioLibrary.sources;
     
     return SizedBox(
       height: 80,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
-        itemCount: noises.length + 1,
+        itemCount: audioSources.length + 1,
         itemBuilder: (context, index) {
           if (index == 0) {
             return _buildAudioItem(null, '无');
           }
-          final noise = noises[index - 1];
-          return _buildAudioItem(noise, noise.emoji);
+          final source = audioSources[index - 1];
+          return _buildAudioItem(source, source.emoji);
         },
       ),
     );
   }
 
-  Widget _buildAudioItem(WhiteNoise? noise, String emoji) {
-    final isSelected = _selectedNoise?.id == noise?.id;
+  Widget _buildAudioItem(SoundSource? source, String emoji) {
+    final isSelected = _selectedAudioSource?.id == source?.id;
     
     return GestureDetector(
       onTap: () {
         setState(() {
-          _selectedNoise = noise;
+          _selectedAudioSource = source;
         });
-        if (noise != null && _timerState.isIdle) {
-          _audioService.play(noise);
+        if (source != null && _timerState.isIdle) {
+          _audioService.playSingle(source);
         }
       },
       child: Container(
@@ -523,10 +542,10 @@ class _HomePageState extends State<HomePage> {
               emoji,
               style: const TextStyle(fontSize: 24),
             ),
-            if (noise != null) ...[
+            if (source != null) ...[
               const SizedBox(height: 4),
               Text(
-                noise.name,
+                source.name,
                 style: TextStyle(
                   fontSize: 10,
                   color: isSelected 
@@ -536,7 +555,7 @@ class _HomePageState extends State<HomePage> {
                 overflow: TextOverflow.ellipsis,
               ),
             ],
-            if (noise == null) ...[
+            if (source == null) ...[
               const SizedBox(height: 4),
               Text(
                 '无',

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/theme.dart';
+import '../core/utils.dart';
 import '../data/database.dart';
 import '../data/models.dart';
 import 'widgets/scene_tag_selector.dart';
@@ -50,18 +51,6 @@ class _StatsPageState extends State<StatsPage> {
     } catch (e) {
       setState(() => _isLoading = false);
     }
-  }
-
-  String _formatDuration(int minutes) {
-    if (minutes < 60) {
-      return '$minutes分钟';
-    }
-    final hours = minutes ~/ 60;
-    final mins = minutes % 60;
-    if (mins == 0) {
-      return '$hours小时';
-    }
-    return '$hours小时$mins分钟';
   }
 
   String _formatShortDate(String dateStr) {
@@ -131,7 +120,7 @@ class _StatsPageState extends State<StatsPage> {
           const Text('总留白时长', style: LiubaiTypography.caption),
           const SizedBox(height: 8),
           Text(
-            _formatDuration(_totalStats['totalDuration'] ?? 0),
+            FormatUtils.formatDuration(_totalStats['totalDuration'] ?? 0),
             style: LiubaiTypography.h1,
           ),
           const SizedBox(height: 24),
@@ -262,7 +251,7 @@ class _StatsPageState extends State<StatsPage> {
           const SizedBox(height: 4),
           // 详情
           Text(
-            '${_formatDuration(duration)} · $count次',
+            '${FormatUtils.formatDuration(duration)} · $count次',
             style: const TextStyle(
               fontSize: 12,
               color: LiubaiColors.pineSmokeGray,
@@ -389,7 +378,7 @@ class _StatsPageState extends State<StatsPage> {
                     const Text('本周总时长', style: LiubaiTypography.caption),
                     const SizedBox(height: 4),
                     Text(
-                      _formatDuration(totalDuration),
+                      FormatUtils.formatDuration(totalDuration),
                       style: LiubaiTypography.h2.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
@@ -517,7 +506,7 @@ class _StatsPageState extends State<StatsPage> {
                     const Text('本月总时长', style: LiubaiTypography.caption),
                     const SizedBox(height: 4),
                     Text(
-                      _formatDuration(totalDuration),
+                      FormatUtils.formatDuration(totalDuration),
                       style: LiubaiTypography.h2.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
@@ -684,7 +673,7 @@ class _StatsPageState extends State<StatsPage> {
               style: LiubaiTypography.h2,
             ),
             const SizedBox(height: 24),
-            _buildDetailRow('专注时长', _formatDuration(stat.totalDuration)),
+            _buildDetailRow('专注时长', FormatUtils.formatDuration(stat.totalDuration)),
             _buildDetailRow('专注次数', '${stat.sessionCount}次'),
             _buildDetailRow('完成次数', '${stat.completedCount}次'),
             const SizedBox(height: 16),
@@ -749,9 +738,9 @@ class _StatsPageState extends State<StatsPage> {
             style: LiubaiTypography.body,
           ),
           const SizedBox(height: 16),
-          _buildDetailItem('总时长', _formatDuration(totalDuration)),
+          _buildDetailItem('总时长', FormatUtils.formatDuration(totalDuration)),
           _buildDetailItem('总次数', '$totalSessions次'),
-          _buildDetailItem('平均时长', _formatDuration(avgDuration)),
+          _buildDetailItem('平均时长', FormatUtils.formatDuration(avgDuration)),
         ],
       ),
     );

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import '../core/theme.dart';
+import '../core/utils.dart';
 import '../data/database.dart';
 import '../data/models.dart';
-import 'package:intl/intl.dart';
 import 'stats_page.dart';
 import 'widgets/scene_tag_selector.dart';
 
@@ -74,35 +74,12 @@ class _LogPageState extends State<LogPage> {
     }
   }
 
-  String _formatDuration(int minutes) {
-    if (minutes < 60) {
-      return '$minutes分钟';
-    }
-    final hours = minutes ~/ 60;
-    final mins = minutes % 60;
-    if (mins == 0) {
-      return '$hours小时';
-    }
-    return '$hours小时$mins分钟';
-  }
-
   String _formatTime(DateTime time) {
-    return DateFormat('HH:mm').format(time);
+    return FormatUtils.formatTime(time);
   }
 
   String _formatDate(DateTime time) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final yesterday = today.subtract(const Duration(days: 1));
-    final date = DateTime(time.year, time.month, time.day);
-
-    if (date == today) {
-      return '今天';
-    } else if (date == yesterday) {
-      return '昨天';
-    } else {
-      return DateFormat('M月d日').format(time);
-    }
+    return FormatUtils.formatDate(time);
   }
 
   void _navigateToStats() {
@@ -165,7 +142,7 @@ class _LogPageState extends State<LogPage> {
           const Text('今日留白', style: LiubaiTypography.caption),
           const SizedBox(height: 8),
           Text(
-            _formatDuration(_todayStats!.totalDuration),
+            FormatUtils.formatDuration(_todayStats!.totalDuration),
             style: LiubaiTypography.h1,
           ),
           const SizedBox(height: 16),
@@ -314,7 +291,7 @@ class _LogPageState extends State<LogPage> {
                       child: Text(
                         session.isCompleted
                             ? '已完成'
-                            : '${_formatDuration(session.actualDuration ?? 0)}',
+                            : '${FormatUtils.formatDuration(session.actualDuration ?? 0)}',
                         style: TextStyle(
                           fontSize: 10,
                           color: session.isCompleted

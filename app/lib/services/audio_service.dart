@@ -1,81 +1,190 @@
+import 'dart:async';
 import 'package:just_audio/just_audio.dart';
 import '../core/exceptions.dart';
 import '../core/logger.dart';
+import '../data/models/scene_template.dart';
 
-enum WhiteNoiseType {
-  rain,
-  rainHeavy,
-  thunder,
-  forest,
-  crickets,
-  birds,
-  cafe,
-  oceanWaves,
-  fire,
-  pages,
-  custom,
-}
+class AudioMixer {
+  static final AudioMixer _instance = AudioMixer._internal();
+  factory AudioMixer() => _instance;
+  AudioMixer._internal();
 
-class WhiteNoise {
-  final String id;
-  final String name;
-  final String emoji;
-  final WhiteNoiseType type;
-  final String? assetPath;
-  final String? filePath;
-  double volume;
-  bool isPlaying;
+  static const String _tag = 'AudioMixer';
 
-  WhiteNoise({
-    required this.id,
-    required this.name,
-    required this.emoji,
-    required this.type,
-    this.assetPath,
-    this.filePath,
-    this.volume = 0.5,
-    this.isPlaying = false,
-  });
+  final Map<String, AudioPlayer> _players = {};
+  final Map<String, double> _trackVolumes = {};
+  bool _isInitialized = false;
 
-  bool get isBuiltIn => type != WhiteNoiseType.custom;
+  bool get isInitialized => _isInitialized;
+  Set<String> get activeTrackIds => _players.keys.toSet();
 
-  WhiteNoise copyWith({
-    String? id,
-    String? name,
-    String? emoji,
-    WhiteNoiseType? type,
-    String? assetPath,
-    String? filePath,
-    double? volume,
-    bool? isPlaying,
-  }) {
-    return WhiteNoise(
-      id: id ?? this.id,
-      name: name ?? this.name,
-      emoji: emoji ?? this.emoji,
-      type: type ?? this.type,
-      assetPath: assetPath ?? this.assetPath,
-      filePath: filePath ?? this.filePath,
-      volume: volume ?? this.volume,
-      isPlaying: isPlaying ?? this.isPlaying,
-    );
+  Future<void> initialize() async {
+    if (_isInitialized) return;
+    Logger.i('初始化音频混合器', tag: _tag);
+    _isInitialized = true;
   }
-}
 
-class BuiltInNoiseConfig {
-  final String id;
-  final String name;
-  final String emoji;
-  final WhiteNoiseType type;
-  final String assetPath;
+  Future<void> addTrack(AudioTrack track) async {
+    if (_players.containsKey(track.id)) {
+      Logger.w('轨道已存在: ${track.id}', tag: _tag);
+      return;
+    }
 
-  const BuiltInNoiseConfig({
-    required this.id,
-    required this.name,
-    required this.emoji,
-    required this.type,
-    required this.assetPath,
-  });
+    try {
+      final player = AudioPlayer();
+      
+      String audioPath;
+      if (track.soundSource.sourceType == SoundSourceType.builtIn) {
+        audioPath = track.soundSource.assetPath;
+        await player.setAsset(audioPath);
+      } else if (track.soundSource.filePath != null) {
+        audioPath = track.soundSource.filePath!;
+        await player.setFilePath(audioPath);
+      } else {
+        throw AudioException(
+          '无效的音频源: ${track.soundSource.id}',
+          code: 'AUDIO_INVALID_SOURCE',
+        );
+      }
+
+      await player.setLoopMode(LoopMode.all);
+      await player.setVolume(track.volume);
+
+      _players[track.id] = player;
+      _trackVolumes[track.id] = track.volume;
+
+      Logger.i('添加轨道成功: ${track.id} - ${track.name}', tag: _tag);
+    } catch (e, stackTrace) {
+      Logger.e('添加轨道失败: ${track.id}', tag: _tag, error: e, stackTrace: stackTrace);
+      rethrow;
+    }
+  }
+
+  Future<void> removeTrack(String trackId) async {
+    final player = _players.remove(trackId);
+    if (player != null) {
+      await player.dispose();
+      _trackVolumes.remove(trackId);
+      Logger.i('移除轨道: $trackId', tag: _tag);
+    }
+  }
+
+  Future<void> setTrackVolume(String trackId, double volume) async {
+    final player = _players[trackId];
+    if (player != null) {
+      final clampedVolume = volume.clamp(0.0, 1.0);
+      await player.setVolume(clampedVolume);
+      _trackVolumes[trackId] = clampedVolume;
+      Logger.d('设置轨道音量: $trackId -> $clampedVolume', tag: _tag);
+    }
+  }
+
+  double getTrackVolume(String trackId) {
+    return _trackVolumes[trackId] ?? 0.0;
+  }
+
+  Future<void> playTrack(String trackId) async {
+    final player = _players[trackId];
+    if (player != null) {
+      await player.play();
+      Logger.i('播放轨道: $trackId', tag: _tag);
+    }
+  }
+
+  Future<void> pauseTrack(String trackId) async {
+    final player = _players[trackId];
+    if (player != null) {
+      await player.pause();
+      Logger.i('暂停轨道: $trackId', tag: _tag);
+    }
+  }
+
+  Future<void> stopTrack(String trackId) async {
+    final player = _players[trackId];
+    if (player != null) {
+      await player.stop();
+      Logger.i('停止轨道: $trackId', tag: _tag);
+    }
+  }
+
+  Future<void> playAll() async {
+    for (final player in _players.values) {
+      await player.play();
+    }
+    Logger.i('播放所有轨道: ${_players.length}个', tag: _tag);
+  }
+
+  Future<void> pauseAll() async {
+    for (final player in _players.values) {
+      await player.pause();
+    }
+    Logger.i('暂停所有轨道', tag: _tag);
+  }
+
+  Future<void> stopAll() async {
+    for (final player in _players.values) {
+      await player.stop();
+    }
+    Logger.i('停止所有轨道', tag: _tag);
+  }
+
+  Future<void> fadeIn(String trackId, int durationMs) async {
+    final player = _players[trackId];
+    if (player == null) return;
+
+    final targetVolume = _trackVolumes[trackId] ?? 1.0;
+    await player.setVolume(0);
+    await player.play();
+
+    const steps = 20;
+    final stepDuration = durationMs ~/ steps;
+    final volumeStep = targetVolume / steps;
+
+    for (int i = 1; i <= steps; i++) {
+      await Future.delayed(Duration(milliseconds: stepDuration));
+      await player.setVolume(volumeStep * i);
+    }
+
+    Logger.i('渐入完成: $trackId', tag: _tag);
+  }
+
+  Future<void> fadeOut(String trackId, int durationMs) async {
+    final player = _players[trackId];
+    if (player == null) return;
+
+    final currentVolume = _trackVolumes[trackId] ?? 1.0;
+    const steps = 20;
+    final stepDuration = durationMs ~/ steps;
+    final volumeStep = currentVolume / steps;
+
+    for (int i = steps - 1; i >= 0; i--) {
+      await Future.delayed(Duration(milliseconds: stepDuration));
+      await player.setVolume(volumeStep * i);
+    }
+
+    await player.pause();
+    await player.setVolume(currentVolume);
+    Logger.i('渐出完成: $trackId', tag: _tag);
+  }
+
+  bool isTrackPlaying(String trackId) {
+    final player = _players[trackId];
+    return player?.playing ?? false;
+  }
+
+  bool get isAnyPlaying {
+    return _players.values.any((p) => p.playing);
+  }
+
+  Future<void> dispose() async {
+    for (final player in _players.values) {
+      await player.dispose();
+    }
+    _players.clear();
+    _trackVolumes.clear();
+    _isInitialized = false;
+    Logger.i('音频混合器已释放', tag: _tag);
+  }
 }
 
 class AudioService {
@@ -85,108 +194,18 @@ class AudioService {
 
   static const String _tag = 'Audio';
 
-  static const List<BuiltInNoiseConfig> _builtInConfigs = [
-    BuiltInNoiseConfig(
-      id: 'rain',
-      name: '雨声',
-      emoji: '🌧️',
-      type: WhiteNoiseType.rain,
-      assetPath: 'assets/audio/rain.mp3',
-    ),
-    BuiltInNoiseConfig(
-      id: 'rain_heavy',
-      name: '暴雨',
-      emoji: '⛈️',
-      type: WhiteNoiseType.rainHeavy,
-      assetPath: 'assets/audio/rain_heavy.mp3',
-    ),
-    BuiltInNoiseConfig(
-      id: 'thunder',
-      name: '雷声',
-      emoji: '⚡',
-      type: WhiteNoiseType.thunder,
-      assetPath: 'assets/audio/thunder.mp3',
-    ),
-    BuiltInNoiseConfig(
-      id: 'forest',
-      name: '森林',
-      emoji: '🌲',
-      type: WhiteNoiseType.forest,
-      assetPath: 'assets/audio/forest.mp3',
-    ),
-    BuiltInNoiseConfig(
-      id: 'crickets',
-      name: '虫鸣',
-      emoji: '🦗',
-      type: WhiteNoiseType.crickets,
-      assetPath: 'assets/audio/crickets.mp3',
-    ),
-    BuiltInNoiseConfig(
-      id: 'birds',
-      name: '鸟鸣',
-      emoji: '🐦',
-      type: WhiteNoiseType.birds,
-      assetPath: 'assets/audio/birds.mp3',
-    ),
-    BuiltInNoiseConfig(
-      id: 'cafe',
-      name: '咖啡厅',
-      emoji: '☕',
-      type: WhiteNoiseType.cafe,
-      assetPath: 'assets/audio/cafe.mp3',
-    ),
-    BuiltInNoiseConfig(
-      id: 'ocean_waves',
-      name: '海浪',
-      emoji: '🌊',
-      type: WhiteNoiseType.oceanWaves,
-      assetPath: 'assets/audio/ocean_waves.mp3',
-    ),
-    BuiltInNoiseConfig(
-      id: 'fire',
-      name: '篝火',
-      emoji: '🔥',
-      type: WhiteNoiseType.fire,
-      assetPath: 'assets/audio/fire.mp3',
-    ),
-    BuiltInNoiseConfig(
-      id: 'pages',
-      name: '翻书',
-      emoji: '📖',
-      type: WhiteNoiseType.pages,
-      assetPath: 'assets/audio/pages.mp3',
-    ),
-  ];
-
-  final AudioPlayer _player = AudioPlayer();
-  WhiteNoise? _currentNoise;
+  final AudioMixer _mixer = AudioMixer();
+  SoundSource? _currentSource;
   bool _isInitialized = false;
 
-  final List<WhiteNoise> _builtInNoises = [];
-  List<WhiteNoise> _customNoises = [];
-
-  List<WhiteNoise> get builtInNoises => _builtInNoises;
-  List<WhiteNoise> get customNoises => _customNoises;
+  bool get isInitialized => _isInitialized;
+  SoundSource? get currentSource => _currentSource;
+  AudioMixer get mixer => _mixer;
 
   Future<void> initialize() async {
     if (_isInitialized) return;
-
     try {
-      _player.playerStateStream.listen((state) {
-        Logger.d('播放器状态: ${state.processingState}', tag: _tag);
-      });
-
-      _player.playbackEventStream.listen(
-        (event) {
-          Logger.d('播放事件', tag: _tag);
-        },
-        onError: (Object e, StackTrace st) {
-          Logger.e('播放事件错误', tag: _tag, error: e, stackTrace: st);
-        },
-      );
-
-      _loadBuiltInNoises();
-
+      await _mixer.initialize();
       _isInitialized = true;
       Logger.i('音频服务初始化完成', tag: _tag);
     } catch (e, stackTrace) {
@@ -199,178 +218,111 @@ class AudioService {
     }
   }
 
-  void _loadBuiltInNoises() {
-    for (final config in _builtInConfigs) {
-      _builtInNoises.add(WhiteNoise(
-        id: config.id,
-        name: config.name,
-        emoji: config.emoji,
-        type: config.type,
-        assetPath: config.assetPath,
-      ));
+  Future<void> playSingle(SoundSource source, {double volume = 1.0}) async {
+    try {
+      await stop();
+
+      final track = AudioTrack(
+        id: 'single_${source.id}',
+        name: source.name,
+        volume: volume,
+        fadeInDuration: 500,
+        fadeOutDuration: 500,
+        soundSource: source,
+      );
+
+      await _mixer.addTrack(track);
+      await _mixer.fadeIn(track.id, 500);
+      _currentSource = source;
+
+      Logger.i('播放音频: ${source.name}', tag: _tag);
+    } catch (e, stackTrace) {
+      Logger.e('播放失败: $source', tag: _tag, error: e, stackTrace: stackTrace);
+      rethrow;
     }
   }
 
-  List<WhiteNoise> get allNoises => [..._builtInNoises, ..._customNoises];
-
-  WhiteNoise? get currentNoise => _currentNoise;
-
-  bool get isPlaying => _player.playing;
-
-  Future<void> play(WhiteNoise noise) async {
+  Future<void> playTracks(List<AudioTrack> tracks) async {
     try {
-      if (!_isInitialized) {
-        await initialize();
-      }
-
-      Logger.i('开始播放: ${noise.name}', tag: _tag);
-
       await stop();
 
-      if (noise.assetPath != null) {
-        await _player.setAsset(noise.assetPath!);
-      } else if (noise.filePath != null) {
-        await _player.setFilePath(noise.filePath!);
-      } else {
-        throw const AudioException(
-          '无效的音频源',
-          code: 'AUDIO_INVALID_SOURCE',
-        );
+      for (final track in tracks) {
+        await _mixer.addTrack(track);
       }
 
-      await _player.setVolume(noise.volume);
-      await _player.setLoopMode(LoopMode.all);
-      await _player.play();
+      for (final track in tracks) {
+        if (track.fadeInDuration > 0) {
+          await _mixer.fadeIn(track.id, track.fadeInDuration);
+        } else {
+          await _mixer.playTrack(track.id);
+        }
+      }
 
-      _currentNoise = noise;
-      noise.isPlaying = true;
+      if (tracks.isNotEmpty) {
+        _currentSource = tracks.first.soundSource;
+      }
 
-      Logger.i('播放成功: ${noise.name}', tag: _tag);
+      Logger.i('播放轨道组: ${tracks.length}个', tag: _tag);
     } catch (e, stackTrace) {
-      Logger.e('播放失败: ${noise.name}', tag: _tag, error: e, stackTrace: stackTrace);
-      throw AudioException(
-        '播放失败: ${noise.name}',
-        code: 'AUDIO_PLAY_ERROR',
-        originalError: e,
-      );
+      Logger.e('播放轨道组失败', tag: _tag, error: e, stackTrace: stackTrace);
+      rethrow;
     }
   }
 
   Future<void> pause() async {
     try {
-      await _player.pause();
-      if (_currentNoise != null) {
-        _currentNoise!.isPlaying = false;
-      }
+      await _mixer.pauseAll();
       Logger.i('暂停播放', tag: _tag);
     } catch (e, stackTrace) {
       Logger.e('暂停失败', tag: _tag, error: e, stackTrace: stackTrace);
-      throw AudioException(
-        '暂停失败',
-        code: 'AUDIO_PAUSE_ERROR',
-        originalError: e,
-      );
+      rethrow;
     }
   }
 
   Future<void> resume() async {
     try {
-      await _player.play();
-      if (_currentNoise != null) {
-        _currentNoise!.isPlaying = true;
-      }
+      await _mixer.playAll();
       Logger.i('恢复播放', tag: _tag);
     } catch (e, stackTrace) {
-      Logger.e('恢复播放失败', tag: _tag, error: e, stackTrace: stackTrace);
-      throw AudioException(
-        '恢复播放失败',
-        code: 'AUDIO_RESUME_ERROR',
-        originalError: e,
-      );
+      Logger.e('恢复失败', tag: _tag, error: e, stackTrace: stackTrace);
+      rethrow;
     }
   }
 
   Future<void> stop() async {
     try {
-      await _player.stop();
-      if (_currentNoise != null) {
-        _currentNoise!.isPlaying = false;
-        _currentNoise = null;
+      for (final trackId in _mixer.activeTrackIds.toList()) {
+        await _mixer.fadeOut(trackId, 300);
+        await Future.delayed(const Duration(milliseconds: 50));
       }
-      Logger.d('停止播放', tag: _tag);
+      await _mixer.stopAll();
+      for (final trackId in _mixer.activeTrackIds.toList()) {
+        await _mixer.removeTrack(trackId);
+      }
+      _currentSource = null;
+      Logger.i('停止播放', tag: _tag);
     } catch (e, stackTrace) {
-      Logger.e('停止播放失败', tag: _tag, error: e, stackTrace: stackTrace);
-      throw AudioException(
-        '停止播放失败',
-        code: 'AUDIO_STOP_ERROR',
-        originalError: e,
-      );
+      Logger.e('停止失败', tag: _tag, error: e, stackTrace: stackTrace);
+      rethrow;
     }
   }
 
-  Future<void> setVolume(double volume) async {
+  Future<void> setVolume(String trackId, double volume) async {
     try {
-      final clampedVolume = volume.clamp(0.0, 1.0);
-      await _player.setVolume(clampedVolume);
-      if (_currentNoise != null) {
-        _currentNoise!.volume = clampedVolume;
-      }
-      // 同时更新所有 builtInNoises 中对应 id 的音量和 customNoises 的音量
-      for (var i = 0; i < _builtInNoises.length; i++) {
-        if (_builtInNoises[i].id == _currentNoise?.id) {
-          _builtInNoises[i].volume = clampedVolume;
-        }
-      }
-      for (var i = 0; i < _customNoises.length; i++) {
-        if (_customNoises[i].id == _currentNoise?.id) {
-          _customNoises[i].volume = clampedVolume;
-        }
-      }
-      Logger.d('设置音量: $clampedVolume', tag: _tag);
+      await _mixer.setTrackVolume(trackId, volume);
     } catch (e, stackTrace) {
-      Logger.e('设置音量失败', tag: _tag, error: e, stackTrace: stackTrace);
-      throw AudioException(
-        '设置音量失败',
-        code: 'AUDIO_VOLUME_ERROR',
-        originalError: e,
-      );
+      Logger.e('设置音量失败: $trackId', tag: _tag, error: e, stackTrace: stackTrace);
+      rethrow;
     }
   }
 
-  Future<void> toggle(WhiteNoise noise) async {
-    if (_currentNoise?.id == noise.id && _player.playing) {
-      await pause();
-    } else {
-      await play(noise);
-    }
-  }
-
-  void addCustomNoise(WhiteNoise noise) {
-    _customNoises.add(noise);
-    Logger.i('添加自定义白噪音: ${noise.name}', tag: _tag);
-  }
-
-  Future<void> removeCustomNoise(String id) async {
-    try {
-      if (_currentNoise?.id == id) {
-        await stop();
-      }
-      _customNoises.removeWhere((noise) => noise.id == id);
-      Logger.i('删除自定义白噪音: $id', tag: _tag);
-    } catch (e, stackTrace) {
-      Logger.e('删除白噪音失败: $id', tag: _tag, error: e, stackTrace: stackTrace);
-      throw AudioException(
-        '删除白噪音失败',
-        code: 'AUDIO_REMOVE_ERROR',
-        originalError: e,
-      );
-    }
-  }
+  bool get isPlaying => _mixer.isAnyPlaying;
 
   Future<void> dispose() async {
     try {
-      await _player.dispose();
+      await _mixer.dispose();
       _isInitialized = false;
+      _currentSource = null;
       Logger.i('音频服务已释放', tag: _tag);
     } catch (e, stackTrace) {
       Logger.e('释放音频服务失败', tag: _tag, error: e, stackTrace: stackTrace);
