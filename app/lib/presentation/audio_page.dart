@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:uuid/uuid.dart';
 import '../core/theme.dart';
+import '../core/logger.dart';
 import '../services/audio_service.dart';
 
 class AudioPage extends StatefulWidget {
@@ -33,7 +34,6 @@ class _AudioPageState extends State<AudioPage> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // 说明文字
           const Padding(
             padding: EdgeInsets.only(bottom: 24),
             child: Text(
@@ -43,13 +43,10 @@ class _AudioPageState extends State<AudioPage> {
             ),
           ),
           
-          // 内置白噪音列表
           ..._audioService.builtInNoises.map((noise) => _buildNoiseCard(noise)),
           
-          const SizedBox(height: 24),
-          
-          // 自定义白噪音
           if (_audioService.customNoises.isNotEmpty) ...[
+            const SizedBox(height: 24),
             const Padding(
               padding: EdgeInsets.only(left: 16, bottom: 8),
               child: Text('我的音频', style: LiubaiTypography.caption),
@@ -59,7 +56,6 @@ class _AudioPageState extends State<AudioPage> {
           
           const SizedBox(height: 24),
           
-          // 导入按钮
           Center(
             child: TextButton.icon(
               onPressed: _importAudio,
@@ -91,22 +87,11 @@ class _AudioPageState extends State<AudioPage> {
         children: [
           Row(
             children: [
-              // Emoji图标
-              Text(
-                noise.emoji,
-                style: const TextStyle(fontSize: 32),
-              ),
+              Text(noise.emoji, style: const TextStyle(fontSize: 32)),
               const SizedBox(width: 16),
-              
-              // 名称
               Expanded(
-                child: Text(
-                  noise.name,
-                  style: LiubaiTypography.body,
-                ),
+                child: Text(noise.name, style: LiubaiTypography.body),
               ),
-              
-              // 删除按钮（仅自定义音频）
               if (isCustom)
                 IconButton(
                   onPressed: () => _deleteCustomNoise(noise),
@@ -115,8 +100,6 @@ class _AudioPageState extends State<AudioPage> {
                     color: LiubaiColors.pineSmokeGray,
                   ),
                 ),
-              
-              // 播放/暂停按钮
               IconButton(
                 onPressed: () => _togglePlay(noise),
                 icon: Icon(
@@ -127,7 +110,6 @@ class _AudioPageState extends State<AudioPage> {
             ],
           ),
           
-          // 音量滑块（仅在播放时显示）
           if (isPlaying || _audioService.currentNoise?.id == noise.id)
             Padding(
               padding: const EdgeInsets.only(top: 16),
@@ -169,12 +151,9 @@ class _AudioPageState extends State<AudioPage> {
       await _audioService.toggle(noise);
       setState(() {});
     } catch (e) {
-      // 显示错误提示
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('音频播放失败，请检查音频文件'),
-          ),
+          const SnackBar(content: Text('音频播放失败，请检查音频文件')),
         );
       }
     }
@@ -187,7 +166,6 @@ class _AudioPageState extends State<AudioPage> {
 
   Future<void> _importAudio() async {
     try {
-      // 显示加载提示
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -196,13 +174,11 @@ class _AudioPageState extends State<AudioPage> {
         ),
       );
 
-      // 打开文件选择器
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.audio,
         allowMultiple: false,
       );
 
-      // 关闭加载提示
       if (mounted) Navigator.pop(context);
 
       if (result != null && result.files.single.path != null) {
@@ -210,7 +186,6 @@ class _AudioPageState extends State<AudioPage> {
         final fileName = file.name;
         final filePath = file.path!;
 
-        // 显示文件名输入对话框
         final nameController = TextEditingController(text: fileName.split('.').first);
         
         final name = await showDialog<String>(
@@ -238,7 +213,6 @@ class _AudioPageState extends State<AudioPage> {
         );
 
         if (name != null && name.isNotEmpty) {
-          // 创建自定义白噪音
           final customNoise = WhiteNoise(
             id: _uuid.v4(),
             name: name,
@@ -248,13 +222,9 @@ class _AudioPageState extends State<AudioPage> {
             volume: 0.5,
           );
 
-          // 添加到音频服务
           _audioService.addCustomNoise(customNoise);
-
-          // 刷新界面
           setState(() {});
 
-          // 显示成功提示
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text('已导入: $name')),
@@ -263,12 +233,10 @@ class _AudioPageState extends State<AudioPage> {
         }
       }
     } catch (e) {
-      // 关闭加载提示
       if (mounted && Navigator.canPop(context)) {
         Navigator.pop(context);
       }
 
-      // 显示错误提示
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('导入失败: $e')),
@@ -297,18 +265,13 @@ class _AudioPageState extends State<AudioPage> {
     );
 
     if (confirmed == true) {
-      // 如果正在播放，先停止
       if (_audioService.currentNoise?.id == noise.id) {
         await _audioService.stop();
       }
 
-      // 删除自定义音频
       _audioService.removeCustomNoise(noise.id);
-
-      // 刷新界面
       setState(() {});
 
-      // 显示成功提示
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('已删除: ${noise.name}')),

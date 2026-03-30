@@ -75,11 +75,23 @@ Future<Database> get database async {
 
 **原因**：内置音频引用不存在的资源文件
 
-**修复**：暂时移除内置音频，只保留用户导入功能
+**修复**：
+- 添加五种内置留白音音频文件到 `assets/audio/` 目录
+- 雨声🌧️、森林🌲、咖啡厅☕、海浪🌊、篝火🔥
+- 更新 `pubspec.yaml` 配置音频资源路径
+- 使用 `just_audio` 的 `setAsset()` 直接播放内置音频
 
-**相关文件**：`lib/services/audio_service.dart`
+**相关文件**：
+- `assets/audio/rain.mp3` - 雨声
+- `assets/audio/forest.mp3` - 森林
+- `assets/audio/cafe.mp3` - 咖啡厅
+- `assets/audio/waves.mp3` - 海浪
+- `assets/audio/fire.mp3` - 篝火
+- `lib/services/audio_service.dart` - 更新内置音频配置
+- `lib/presentation/audio_page.dart` - 简化播放逻辑
+- `pubspec.yaml` - 添加 assets 配置
 
-**提交**：`ffc3212`
+**提交**：`新提交`
 
 ---
 

@@ -2,17 +2,15 @@ import 'package:just_audio/just_audio.dart';
 import '../core/exceptions.dart';
 import '../core/logger.dart';
 
-/// 白噪音类型
 enum WhiteNoiseType {
-  rain, // 雨声
-  forest, // 森林
-  cafe, // 咖啡厅
-  waves, // 海浪
-  fire, // 篝火
-  custom, // 自定义
+  rain,
+  forest,
+  cafe,
+  waves,
+  fire,
+  custom,
 }
 
-/// 白噪音模型
 class WhiteNoise {
   final String id;
   final String name;
@@ -59,7 +57,22 @@ class WhiteNoise {
   }
 }
 
-/// 音频服务
+class BuiltInNoiseConfig {
+  final String id;
+  final String name;
+  final String emoji;
+  final WhiteNoiseType type;
+  final String assetPath;
+
+  const BuiltInNoiseConfig({
+    required this.id,
+    required this.name,
+    required this.emoji,
+    required this.type,
+    required this.assetPath,
+  });
+}
+
 class AudioService {
   static final AudioService _instance = AudioService._internal();
   factory AudioService() => _instance;
@@ -67,23 +80,58 @@ class AudioService {
 
   static const String _tag = 'Audio';
 
+  static const List<BuiltInNoiseConfig> _builtInConfigs = [
+    BuiltInNoiseConfig(
+      id: 'rain',
+      name: '雨声',
+      emoji: '🌧️',
+      type: WhiteNoiseType.rain,
+      assetPath: 'assets/audio/rain.mp3',
+    ),
+    BuiltInNoiseConfig(
+      id: 'forest',
+      name: '森林',
+      emoji: '🌲',
+      type: WhiteNoiseType.forest,
+      assetPath: 'assets/audio/forest.mp3',
+    ),
+    BuiltInNoiseConfig(
+      id: 'cafe',
+      name: '咖啡厅',
+      emoji: '☕',
+      type: WhiteNoiseType.cafe,
+      assetPath: 'assets/audio/cafe.mp3',
+    ),
+    BuiltInNoiseConfig(
+      id: 'waves',
+      name: '海浪',
+      emoji: '🌊',
+      type: WhiteNoiseType.waves,
+      assetPath: 'assets/audio/waves.mp3',
+    ),
+    BuiltInNoiseConfig(
+      id: 'fire',
+      name: '篝火',
+      emoji: '🔥',
+      type: WhiteNoiseType.fire,
+      assetPath: 'assets/audio/fire.mp3',
+    ),
+  ];
+
   final AudioPlayer _player = AudioPlayer();
   WhiteNoise? _currentNoise;
   bool _isInitialized = false;
 
-  // 内置白噪音列表（暂时为空，需要实际音频文件）
-  // TODO: 添加实际音频文件后启用
-  final List<WhiteNoise> builtInNoises = [];
+  final List<WhiteNoise> _builtInNoises = [];
+  List<WhiteNoise> _customNoises = [];
 
-  // 自定义白噪音列表
-  List<WhiteNoise> customNoises = [];
+  List<WhiteNoise> get builtInNoises => _builtInNoises;
+  List<WhiteNoise> get customNoises => _customNoises;
 
-  /// 初始化音频服务
   Future<void> initialize() async {
     if (_isInitialized) return;
 
     try {
-      // 监听播放状态
       _player.playerStateStream.listen((state) {
         Logger.d('播放器状态: ${state.processingState}', tag: _tag);
       });
@@ -97,6 +145,8 @@ class AudioService {
         },
       );
 
+      _loadBuiltInNoises();
+
       _isInitialized = true;
       Logger.i('音频服务初始化完成', tag: _tag);
     } catch (e, stackTrace) {
@@ -109,16 +159,24 @@ class AudioService {
     }
   }
 
-  /// 获取所有白噪音
-  List<WhiteNoise> get allNoises => [...builtInNoises, ...customNoises];
+  void _loadBuiltInNoises() {
+    for (final config in _builtInConfigs) {
+      _builtInNoises.add(WhiteNoise(
+        id: config.id,
+        name: config.name,
+        emoji: config.emoji,
+        type: config.type,
+        assetPath: config.assetPath,
+      ));
+    }
+  }
 
-  /// 获取当前播放的白噪音
+  List<WhiteNoise> get allNoises => [..._builtInNoises, ..._customNoises];
+
   WhiteNoise? get currentNoise => _currentNoise;
 
-  /// 是否正在播放
   bool get isPlaying => _player.playing;
 
-  /// 播放白噪音
   Future<void> play(WhiteNoise noise) async {
     try {
       if (!_isInitialized) {
@@ -127,11 +185,9 @@ class AudioService {
 
       Logger.i('开始播放: ${noise.name}', tag: _tag);
 
-      // 停止当前播放
       await stop();
 
-      // 设置音频源
-      if (noise.isBuiltIn && noise.assetPath != null) {
+      if (noise.assetPath != null) {
         await _player.setAsset(noise.assetPath!);
       } else if (noise.filePath != null) {
         await _player.setFilePath(noise.filePath!);
@@ -142,16 +198,10 @@ class AudioService {
         );
       }
 
-      // 设置音量
       await _player.setVolume(noise.volume);
-
-      // 循环播放
       await _player.setLoopMode(LoopMode.all);
-
-      // 开始播放
       await _player.play();
 
-      // 更新状态
       _currentNoise = noise;
       noise.isPlaying = true;
 
@@ -166,7 +216,6 @@ class AudioService {
     }
   }
 
-  /// 暂停播放
   Future<void> pause() async {
     try {
       await _player.pause();
@@ -184,7 +233,6 @@ class AudioService {
     }
   }
 
-  /// 恢复播放
   Future<void> resume() async {
     try {
       await _player.play();
@@ -202,7 +250,6 @@ class AudioService {
     }
   }
 
-  /// 停止播放
   Future<void> stop() async {
     try {
       await _player.stop();
@@ -221,10 +268,8 @@ class AudioService {
     }
   }
 
-  /// 设置音量
   Future<void> setVolume(double volume) async {
     try {
-      // 限制音量范围 0.0 - 1.0
       final clampedVolume = volume.clamp(0.0, 1.0);
       await _player.setVolume(clampedVolume);
       if (_currentNoise != null) {
@@ -241,7 +286,6 @@ class AudioService {
     }
   }
 
-  /// 切换播放/暂停
   Future<void> toggle(WhiteNoise noise) async {
     if (_currentNoise?.id == noise.id && _player.playing) {
       await pause();
@@ -250,20 +294,17 @@ class AudioService {
     }
   }
 
-  /// 添加自定义白噪音
   void addCustomNoise(WhiteNoise noise) {
-    customNoises.add(noise);
+    _customNoises.add(noise);
     Logger.i('添加自定义白噪音: ${noise.name}', tag: _tag);
   }
 
-  /// 删除自定义白噪音
   Future<void> removeCustomNoise(String id) async {
     try {
-      // 如果正在播放该噪音，先停止
       if (_currentNoise?.id == id) {
         await stop();
       }
-      customNoises.removeWhere((noise) => noise.id == id);
+      _customNoises.removeWhere((noise) => noise.id == id);
       Logger.i('删除自定义白噪音: $id', tag: _tag);
     } catch (e, stackTrace) {
       Logger.e('删除白噪音失败: $id', tag: _tag, error: e, stackTrace: stackTrace);
@@ -275,7 +316,6 @@ class AudioService {
     }
   }
 
-  /// 释放资源
   Future<void> dispose() async {
     try {
       await _player.dispose();
