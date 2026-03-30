@@ -256,6 +256,9 @@ class _LogPageState extends State<LogPage> {
 
   Widget _buildSessionCard(LiubaiSession session) {
     final tag = _getTagById(session.sceneTagId);
+    final progress = session.plannedDuration > 0
+        ? ((session.actualDuration ?? 0) / session.plannedDuration * 100).clamp(0, 100).toInt()
+        : 0;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -293,11 +296,9 @@ class _LogPageState extends State<LogPage> {
                       SceneTagChip(tag: tag, isSmall: true),
                       const SizedBox(width: 8),
                     ],
-                    // 时长
+                    // 设置的时长
                     Text(
-                      session.actualDuration != null
-                          ? _formatDuration(session.actualDuration!)
-                          : _formatDuration(session.plannedDuration),
+                      '${session.plannedDuration}分钟',
                       style: LiubaiTypography.body,
                     ),
                     const SizedBox(width: 8),
@@ -311,13 +312,44 @@ class _LogPageState extends State<LogPage> {
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(
-                        session.isCompleted ? '已完成' : '未完成',
+                        session.isCompleted
+                            ? '已完成'
+                            : '${_formatDuration(session.actualDuration ?? 0)}',
                         style: TextStyle(
                           fontSize: 10,
                           color: session.isCompleted
                               ? LiubaiColors.inkBlack
                               : LiubaiColors.pineSmokeGray,
                         ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                // 进度条
+                Row(
+                  children: [
+                    Expanded(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(2),
+                        child: LinearProgressIndicator(
+                          value: progress / 100,
+                          backgroundColor: LiubaiColors.lightInkGray,
+                          valueColor: AlwaysStoppedAnimation(
+                            session.isCompleted
+                                ? LiubaiColors.inkBlack
+                                : LiubaiColors.pineSmokeGray,
+                          ),
+                          minHeight: 4,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '$progress%',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        color: LiubaiColors.pineSmokeGray,
                       ),
                     ),
                   ],
