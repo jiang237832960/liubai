@@ -20,15 +20,27 @@ class DatabaseHelper {
   /// 获取数据库实例（线程安全）
   Future<Database> get database async {
     if (_database != null) return _database!;
-    if (_dbInitFuture != null) return _dbInitFuture!;
-    _dbInitFuture = _initDB(_dbName).then((db) {
+    
+    // 如果初始化正在进行，等待它完成
+    if (_dbInitCompleter != null) {
+      return _dbInitCompleter!.future;
+    }
+    
+    // 开始初始化
+    _dbInitCompleter = Completer<Database>();
+    try {
+      final db = await _initDB(_dbName);
       _database = db;
+      _dbInitCompleter!.complete(db);
       return db;
-    });
-    return _dbInitFuture!;
+    } catch (e) {
+      _dbInitCompleter!.completeError(e);
+      _dbInitCompleter = null;
+      rethrow;
+    }
   }
 
-  Future<Database>? _dbInitFuture;
+  Completer<Database>? _dbInitCompleter;
 
   /// 检查存储空间是否充足（至少100MB）
   Future<bool> _checkStorageSpace() async {
