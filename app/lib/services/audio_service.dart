@@ -4,10 +4,15 @@ import '../core/logger.dart';
 
 enum WhiteNoiseType {
   rain,
+  rainHeavy,
+  thunder,
   forest,
+  crickets,
+  birds,
   cafe,
-  waves,
+  oceanWaves,
   fire,
+  pages,
   custom,
 }
 
@@ -89,11 +94,39 @@ class AudioService {
       assetPath: 'assets/audio/rain.mp3',
     ),
     BuiltInNoiseConfig(
+      id: 'rain_heavy',
+      name: '暴雨',
+      emoji: '⛈️',
+      type: WhiteNoiseType.rainHeavy,
+      assetPath: 'assets/audio/rain_heavy.mp3',
+    ),
+    BuiltInNoiseConfig(
+      id: 'thunder',
+      name: '雷声',
+      emoji: '⚡',
+      type: WhiteNoiseType.thunder,
+      assetPath: 'assets/audio/thunder.mp3',
+    ),
+    BuiltInNoiseConfig(
       id: 'forest',
       name: '森林',
       emoji: '🌲',
       type: WhiteNoiseType.forest,
       assetPath: 'assets/audio/forest.mp3',
+    ),
+    BuiltInNoiseConfig(
+      id: 'crickets',
+      name: '虫鸣',
+      emoji: '🦗',
+      type: WhiteNoiseType.crickets,
+      assetPath: 'assets/audio/crickets.mp3',
+    ),
+    BuiltInNoiseConfig(
+      id: 'birds',
+      name: '鸟鸣',
+      emoji: '🐦',
+      type: WhiteNoiseType.birds,
+      assetPath: 'assets/audio/birds.mp3',
     ),
     BuiltInNoiseConfig(
       id: 'cafe',
@@ -103,11 +136,11 @@ class AudioService {
       assetPath: 'assets/audio/cafe.mp3',
     ),
     BuiltInNoiseConfig(
-      id: 'waves',
+      id: 'ocean_waves',
       name: '海浪',
       emoji: '🌊',
-      type: WhiteNoiseType.waves,
-      assetPath: 'assets/audio/waves.mp3',
+      type: WhiteNoiseType.oceanWaves,
+      assetPath: 'assets/audio/ocean_waves.mp3',
     ),
     BuiltInNoiseConfig(
       id: 'fire',
@@ -115,6 +148,13 @@ class AudioService {
       emoji: '🔥',
       type: WhiteNoiseType.fire,
       assetPath: 'assets/audio/fire.mp3',
+    ),
+    BuiltInNoiseConfig(
+      id: 'pages',
+      name: '翻书',
+      emoji: '📖',
+      type: WhiteNoiseType.pages,
+      assetPath: 'assets/audio/pages.mp3',
     ),
   ];
 
