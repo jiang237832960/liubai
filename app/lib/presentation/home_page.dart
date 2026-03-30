@@ -31,15 +31,21 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _loadSettings() async {
-    final settings = await DatabaseHelper.instance.getSettings();
-    setState(() {
-      _defaultDuration = settings.defaultDuration;
-      _timerState = TimerState(
-        total: Duration(minutes: settings.defaultDuration),
-        remaining: Duration(minutes: settings.defaultDuration),
-        sceneTagId: settings.defaultSceneTagId,
-      );
-    });
+    try {
+      final settings = await DatabaseHelper.instance.getSettings();
+      if (mounted) {
+        setState(() {
+          _defaultDuration = settings.defaultDuration;
+          _timerState = TimerState(
+            total: Duration(minutes: settings.defaultDuration),
+            remaining: Duration(minutes: settings.defaultDuration),
+            sceneTagId: settings.defaultSceneTagId,
+          );
+        });
+      }
+    } catch (e) {
+      Logger.e('加载设置失败', error: e);
+    }
   }
 
   Future<void> _loadTags() async {

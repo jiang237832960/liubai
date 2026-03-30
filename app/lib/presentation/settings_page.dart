@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../core/logger.dart';
 import '../core/theme.dart';
 import '../data/database.dart';
 import '../data/models.dart';
@@ -26,13 +27,24 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 
   Future<void> _loadData() async {
-    final settings = await DatabaseHelper.instance.getSettings();
-    final tags = await DatabaseHelper.instance.getAllSceneTags();
-    setState(() {
-      _settings = settings;
-      _tags = tags;
-      _isLoading = false;
-    });
+    try {
+      final settings = await DatabaseHelper.instance.getSettings();
+      final tags = await DatabaseHelper.instance.getAllSceneTags();
+      if (mounted) {
+        setState(() {
+          _settings = settings;
+          _tags = tags;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      Logger.e('加载设置失败', error: e);
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   Future<void> _updateSettings(UserSettings newSettings) async {
