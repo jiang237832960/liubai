@@ -16,7 +16,36 @@
 
 **相关文件**：`lib/data/database.dart` - `getTotalStats()` (行859)
 
-**提交**：`新提交`
+**提交**：`dfa3a21`
+
+---
+
+### 10. 设置页面一直转圈
+
+**原因**：`SettingsPage._loadData` 方法没有 try-catch 异常处理，当数据库操作失败时会抛出异常但不被捕获，导致 `_isLoading` 永远不会被设置为 false
+
+**修复**：
+- `SettingsPage._loadData` 添加 try-catch 异常处理
+- `HomePage._loadSettings` 添加 try-catch 和 mounted 检查
+- 确保数据库操作失败时 UI 仍能正常显示
+
+**相关文件**：
+- `lib/presentation/settings_page.dart` - `_loadData()`
+- `lib/presentation/home_page.dart` - `_loadSettings()`
+
+**提交**：`3473081`
+
+---
+
+### 11. 首页场景标签无法加载
+
+**原因**：同问题10，数据库初始化或查询失败时没有错误处理，导致标签列表为空
+
+**修复**：同问题10
+
+**相关文件**：同上
+
+**提交**：`3473081`
 
 ---
 
