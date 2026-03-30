@@ -7,9 +7,11 @@ import '../data/database.dart';
 import '../data/models.dart';
 import '../data/models/scene_template.dart';
 import '../services/audio_service.dart';
+import '../services/template_service.dart';
+import '../services/timeline_engine.dart';
 import 'log_page.dart';
 import 'settings_page.dart';
-import 'widgets/scene_tag_selector.dart';
+import 'template_editor_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -19,16 +21,18 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  TimerState _timerState = TimerState();
-  Timer? _timer;
-  int _defaultDuration = 25;
-  int? _currentSessionId;
-  SceneTag? _selectedTag;
-  List<SceneTag> _tags = [];
+  final _templateService = TemplateService();
+  final _audioService = AudioService();
+  final _timelineEngine = TimelineEngine();
   
-  final AudioService _audioService = AudioService();
-  SoundSource? _selectedAudioSource;
-  bool _isAudioInitialized = false;
+  List<SceneTemplate> _templates = [];
+  SceneTemplate? _activeTemplate;
+  bool _isLoading = true;
+  TimelineStatus _timelineStatus = TimelineStatus.idle;
+  int _elapsedMs = 0;
+  int _currentCycle = 1;
+  int _totalCycles = 1;
+  SegmentType? _currentSegmentType;
 
   @override
   void initState() {
@@ -37,406 +41,307 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _initialize() async {
-    _loadSettings();
-    _loadTags();
-    await _initAudio();
+    await _audioService.initialize();
+    await _loadTemplates();
+    _setupTimelineCallbacks();
   }
 
-  Future<void> _initAudio() async {
-    try {
-      await _audioService.initialize();
+  void _setupTimelineCallbacks() {
+    _timelineEngine.onTick = (state) {
       if (mounted) {
         setState(() {
-          _isAudioInitialized = true;
+          _elapsedMs = state.elapsedMs;
+          _currentCycle = state.currentCycle;
+          _currentSegmentType = state.currentSegmentType;
         });
       }
-    } catch (e, stackTrace) {
-      Logger.e('音频初始化失败', tag: 'HomePage', error: e, stackTrace: stackTrace);
+    };
+
+    _timelineEngine.onPhaseChange = (state) {
+      if (mounted) {
+        setState(() {
+          _currentSegmentType = state.currentSegmentType;
+          _currentCycle = state.currentCycle;
+          _elapsedMs = state.elapsedMs;
+          _timelineStatus = state.status;
+          _activeTemplate = state.template;
+          _totalCycles = state.totalCycles;
+        });
+        _audioService.stop();
+      }
+    };
+
+    _timelineEngine.onComplete = (state) {
+      if (mounted) {
+        setState(() {
+          _timelineStatus = TimelineStatus.completed;
+        });
+        _audioService.stop();
+      }
+    };
+  }
+
+  Future<void> _loadTemplates() async {
+    try {
+      final templates = await _templateService.getAllTemplates();
+      if (mounted) {
+        setState(() {
+          _templates = templates;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      Logger.e('加载模板失败', tag: 'HomePage', error: e);
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _timelineEngine.dispose();
     _audioService.dispose();
     super.dispose();
-  }
-
-  Future<void> _loadSettings() async {
-    try {
-      final settings = await DatabaseHelper.instance.getSettings();
-      if (mounted) {
-        setState(() {
-          _defaultDuration = settings.defaultDuration;
-          if (_timerState.isIdle) {
-            _timerState = TimerState(
-              total: Duration(minutes: settings.defaultDuration),
-              remaining: Duration(minutes: settings.defaultDuration),
-              sceneTagId: settings.defaultSceneTagId,
-            );
-          }
-        });
-      }
-    } catch (e, stackTrace) {
-      Logger.e('加载设置失败', tag: 'HomePage', error: e, stackTrace: stackTrace);
-    }
-  }
-
-  Future<void> _loadTags() async {
-    try {
-      final tags = await DatabaseHelper.instance.getAllSceneTags();
-      if (mounted) {
-        setState(() {
-          _tags = tags;
-          if (_timerState.sceneTagId != null) {
-            _selectedTag = tags.firstWhere(
-              (tag) => tag.id == _timerState.sceneTagId,
-              orElse: () => tags.first,
-            );
-          }
-        });
-      }
-    } catch (e, stackTrace) {
-      Logger.e('加载标签失败', tag: 'HomePage', error: e, stackTrace: stackTrace);
-    }
-  }
-
-  void _startTimerTick() {
-    _timer?.cancel();
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_timerState.remaining.inSeconds > 0) {
-        setState(() {
-          _timerState = _timerState.copyWith(
-            remaining: Duration(
-              seconds: _timerState.remaining.inSeconds - 1,
-            ),
-          );
-        });
-      } else {
-        _completeTimer();
-      }
-    });
-  }
-
-  Future<void> _startTimer() async {
-    try {
-      final now = DateTime.now();
-      
-      if (_selectedAudioSource != null) {
-        await _audioService.playSingle(_selectedAudioSource!);
-      }
-      
-      final session = LiubaiSession(
-        startTime: now,
-        plannedDuration: _defaultDuration,
-        sceneTagId: _timerState.sceneTagId,
-        createdAt: now,
-        updatedAt: now,
-      );
-      
-      final id = await DatabaseHelper.instance.insertSession(session);
-      
-      if (!mounted) return;
-      
-      setState(() {
-        _currentSessionId = id;
-        _timerState = _timerState.copyWith(
-          status: TimerStatus.running,
-          startTime: now,
-        );
-      });
-
-      _startTimerTick();
-    } catch (e, stackTrace) {
-      Logger.e('开始留白失败', tag: 'HomePage', error: e, stackTrace: stackTrace);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('开始留白失败: $e')),
-        );
-      }
-    }
-  }
-
-  void _pauseTimer() {
-    _timer?.cancel();
-    _audioService.pause();
-    if (mounted) {
-      setState(() {
-        _timerState = _timerState.copyWith(status: TimerStatus.paused);
-      });
-    }
-  }
-
-  void _resumeTimer() {
-    _audioService.resume();
-    if (mounted) {
-      setState(() {
-        _timerState = _timerState.copyWith(status: TimerStatus.running);
-      });
-    }
-    _startTimerTick();
-  }
-
-  Future<void> _stopTimer() async {
-    _timer?.cancel();
-    await _audioService.stop();
-    
-    if (_currentSessionId != null) {
-      final now = DateTime.now();
-      final actualDuration = _timerState.total.inMinutes - _timerState.remaining.inMinutes;
-      
-      final session = LiubaiSession(
-        id: _currentSessionId,
-        startTime: _timerState.startTime!,
-        endTime: now,
-        plannedDuration: _defaultDuration,
-        actualDuration: actualDuration > 0 ? actualDuration : 0,
-        isCompleted: false,
-        sceneTagId: _timerState.sceneTagId,
-        createdAt: _timerState.startTime!,
-        updatedAt: now,
-      );
-      
-      await DatabaseHelper.instance.updateSession(session);
-    }
-    
-    if (mounted) {
-      setState(() {
-        _currentSessionId = null;
-        _timerState = TimerState(
-          total: Duration(minutes: _defaultDuration),
-          remaining: Duration(minutes: _defaultDuration),
-          sceneTagId: _timerState.sceneTagId,
-        );
-      });
-    }
-  }
-
-  Future<void> _completeTimer() async {
-    _timer?.cancel();
-    await _audioService.stop();
-    
-    if (_currentSessionId != null) {
-      final now = DateTime.now();
-      
-      final session = LiubaiSession(
-        id: _currentSessionId,
-        startTime: _timerState.startTime!,
-        endTime: now,
-        plannedDuration: _defaultDuration,
-        actualDuration: _defaultDuration,
-        isCompleted: true,
-        sceneTagId: _timerState.sceneTagId,
-        createdAt: _timerState.startTime!,
-        updatedAt: now,
-      );
-      
-      await DatabaseHelper.instance.updateSession(session);
-    }
-    
-    if (mounted) {
-      setState(() {
-        _timerState = _timerState.copyWith(status: TimerStatus.completed);
-      });
-    }
-  }
-
-  void _onTagSelected(int? tagId) {
-    setState(() {
-      _timerState = _timerState.copyWith(sceneTagId: tagId);
-      _selectedTag = tagId != null
-          ? _tags.firstWhere(
-              (tag) => tag.id == tagId,
-              orElse: () => _tags.first,
-            )
-          : null;
-    });
-  }
-
-  String _formatDuration(Duration duration) {
-    final minutes = duration.inMinutes.toString().padLeft(2, '0');
-    final seconds = (duration.inSeconds % 60).toString().padLeft(2, '0');
-    return '$minutes:$seconds';
-  }
-
-  String _getStatusText() {
-    switch (_timerState.status) {
-      case TimerStatus.idle:
-        return '';
-      case TimerStatus.running:
-        return '留白中...';
-      case TimerStatus.paused:
-        return '已暂停';
-      case TimerStatus.completed:
-        return '留白完成';
-    }
-  }
-
-  void _navigateToLog() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const LogPage()),
-    );
-  }
-
-  void _navigateToSettings() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const SettingsPage()),
-    ).then((_) => _loadSettings());
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
-        child: Column(
+        child: _timelineStatus == TimelineStatus.idle
+            ? _buildIdleView()
+            : _buildRunningView(),
+      ),
+    );
+  }
+
+  Widget _buildIdleView() {
+    return Column(
+      children: [
+        Expanded(
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _templates.isEmpty
+                  ? _buildEmptyState()
+                  : _buildTemplateList(),
+        ),
+        _buildBottomNav(),
+      ],
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.add_circle_outline,
+            size: 64,
+            color: LiubaiColors.pineSmokeGray,
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            '创建你的第一个专注场景',
+            style: LiubaiTypography.body,
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: _createTemplate,
+            icon: const Icon(Icons.add),
+            label: const Text('创建场景'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTemplateList() {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        const Text('选择场景开始专注', style: LiubaiTypography.caption),
+        const SizedBox(height: 16),
+        ..._templates.map((t) => _buildTemplateCard(t)),
+        const SizedBox(height: 16),
+        _buildAddTemplateCard(),
+      ],
+    );
+  }
+
+  Widget _buildTemplateCard(SceneTemplate template) {
+    final workMinutes = template.workDurationMs ~/ 60000;
+    final restMinutes = template.restDurationMs ~/ 60000;
+    final totalMinutes = (workMinutes + restMinutes) * template.cycles;
+
+    return GestureDetector(
+      onTap: () => _startTemplate(template),
+      onLongPress: () => _showTemplateOptions(template),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: LiubaiColors.liubaiWhite,
+          border: Border.all(color: LiubaiColors.lightInkGray),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
           children: [
-            const Expanded(flex: 2, child: SizedBox()),
-            
-            if (_timerState.isIdle)
-              const Text(
-                '留 白',
-                style: LiubaiTypography.brand,
-              ),
-            
-            if (!_timerState.isIdle)
-              Column(
+            Text(template.emoji, style: const TextStyle(fontSize: 40)),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Text(template.name, style: LiubaiTypography.body),
+                  const SizedBox(height: 4),
                   Text(
-                    _formatDuration(_timerState.remaining),
-                    style: LiubaiTypography.timer,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    _getStatusText(),
+                    '${template.cycles}轮 · ${workMinutes}分钟工作 · ${restMinutes}分钟休息',
                     style: LiubaiTypography.caption,
                   ),
-                  if (_selectedTag != null) ...[
-                    const SizedBox(height: 16),
-                    SceneTagChip(tag: _selectedTag!),
-                  ],
+                  Text(
+                    '总时长约 ${totalMinutes}分钟',
+                    style: LiubaiTypography.caption,
+                  ),
                 ],
               ),
-            
-            const Expanded(flex: 2, child: SizedBox()),
-            
-            if (_timerState.isIdle)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 32),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '选择场景',
-                      style: LiubaiTypography.caption,
-                    ),
-                    const SizedBox(height: 12),
-                    SceneTagSelector(
-                      selectedTagId: _timerState.sceneTagId,
-                      onTagSelected: _onTagSelected,
-                      onTagsChanged: _loadTags,
-                      showAddButton: true,
-                    ),
-                    const SizedBox(height: 24),
-                    Text(
-                      '选择音频',
-                      style: LiubaiTypography.caption,
-                    ),
-                    const SizedBox(height: 12),
-                    if (_isAudioInitialized)
-                      _buildAudioSelector(),
-                  ],
-                ),
-              ),
-            
-            const Expanded(flex: 1, child: SizedBox()),
-            
-            _buildActionButton(),
-            
-            const Expanded(flex: 2, child: SizedBox()),
-            
-            _buildBottomNav(),
+            ),
+            IconButton(
+              onPressed: () => _editTemplate(template),
+              icon: const Icon(Icons.edit_outlined),
+              color: LiubaiColors.pineSmokeGray,
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildActionButton() {
-    if (_timerState.isIdle) {
-      return ElevatedButton(
-        onPressed: _startTimer,
-        child: const Text('开始留白'),
-      );
-    } else if (_timerState.isRunning) {
-      return Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          TextButton(
-            onPressed: _pauseTimer,
-            child: const Text('暂停'),
+  Widget _buildAddTemplateCard() {
+    return GestureDetector(
+      onTap: _createTemplate,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: LiubaiColors.lightInkGray,
+            width: 1,
           ),
-          const SizedBox(width: 32),
-          TextButton(
-            onPressed: _stopTimer,
-            child: const Text('结束'),
-          ),
-        ],
-      );
-    } else if (_timerState.isPaused) {
-      return Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          ElevatedButton(
-            onPressed: _resumeTimer,
-            child: const Text('继续'),
-          ),
-          const SizedBox(width: 32),
-          TextButton(
-            onPressed: _stopTimer,
-            child: const Text('结束'),
-          ),
-        ],
-      );
-    } else if (_timerState.isCompleted) {
-      return Column(
-        children: [
-          const Icon(
-            Icons.check_circle_outline,
-            size: 64,
-            color: LiubaiColors.inkBlack,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            '${_timerState.total.inMinutes}分钟',
-            style: LiubaiTypography.h2,
-          ),
-          if (_selectedTag != null) ...[
-            const SizedBox(height: 8),
-            SceneTagChip(tag: _selectedTag!),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.add, color: LiubaiColors.pineSmokeGray),
+            const SizedBox(width: 8),
+            Text(
+              '创建新场景',
+              style: LiubaiTypography.body.copyWith(
+                color: LiubaiColors.pineSmokeGray,
+              ),
+            ),
           ],
-          const SizedBox(height: 32),
-          ElevatedButton(
-            onPressed: () {
-              setState(() {
-                _currentSessionId = null;
-                _timerState = TimerState(
-                  total: Duration(minutes: _defaultDuration),
-                  remaining: Duration(minutes: _defaultDuration),
-                  sceneTagId: _timerState.sceneTagId,
-                );
-              });
-            },
-            child: const Text('再次留白'),
-          ),
-        ],
-      );
-    }
-    return const SizedBox();
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRunningView() {
+    final template = _activeTemplate!;
+    final workMinutes = template.workDurationMs ~/ 60000;
+    final restMinutes = template.restDurationMs ~/ 60000;
+    final phaseMs = _currentSegmentType == SegmentType.work 
+        ? template.workDurationMs 
+        : template.restDurationMs;
+    final phaseElapsed = _currentSegmentType == SegmentType.work
+        ? _elapsedMs % (template.workDurationMs + template.restDurationMs)
+        : (_elapsedMs - template.workDurationMs) % (template.workDurationMs + template.restDurationMs);
+    
+    final progress = phaseMs > 0 ? phaseElapsed / phaseMs : 0.0;
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          children: [
+            Text(
+              template.emoji,
+              style: const TextStyle(fontSize: 48),
+            ),
+            const SizedBox(height: 8),
+            Text(template.name, style: LiubaiTypography.h2),
+            const SizedBox(height: 8),
+            Text(
+              '第$_currentCycle / $_totalCycles 轮',
+              style: LiubaiTypography.caption,
+            ),
+            const SizedBox(height: 32),
+            
+            Expanded(
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        SizedBox(
+                          width: 200,
+                          height: 200,
+                          child: CircularProgressIndicator(
+                            value: progress,
+                            strokeWidth: 8,
+                            backgroundColor: LiubaiColors.lightInkGray,
+                            valueColor: AlwaysStoppedAnimation(
+                              _currentSegmentType == SegmentType.work
+                                  ? LiubaiColors.inkBlack
+                                  : LiubaiColors.cinnabarRed,
+                            ),
+                          ),
+                        ),
+                        Column(
+                          children: [
+                            Text(
+                              _currentSegmentType == SegmentType.work ? '专注' : '休息',
+                              style: LiubaiTypography.caption,
+                            ),
+                            Text(
+                              FormatUtils.formatDuration((phaseMs - phaseElapsed) ~/ 60000),
+                              style: LiubaiTypography.timer,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                TextButton(
+                  onPressed: _pauseTemplate,
+                  child: Text(_timelineStatus == TimelineStatus.running ? '暂停' : '继续'),
+                ),
+                const SizedBox(width: 32),
+                TextButton(
+                  onPressed: _stopTemplate,
+                  child: const Text('结束'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildBottomNav() {
@@ -445,7 +350,7 @@ class _HomePageState extends State<HomePage> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          _buildNavItem('留白', Icons.circle_outlined, true),
+          _buildNavItem('场景', Icons.circle_outlined, true),
           _buildNavItem('日志', Icons.menu_book_outlined, false),
           _buildNavItem('设置', Icons.settings_outlined, false),
         ],
@@ -455,118 +360,136 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildNavItem(String label, IconData icon, bool isSelected) {
     final theme = Theme.of(context);
-    final selectedColor = theme.brightness == Brightness.dark 
-        ? LiubaiColors.liubaiWhite 
-        : LiubaiColors.inkBlack;
-    final unselectedColor = LiubaiColors.pineSmokeGray;
-    
+    final color = isSelected
+        ? LiubaiColors.inkBlack
+        : LiubaiColors.pineSmokeGray;
+
     return GestureDetector(
       onTap: () {
         if (label == '日志') {
-          _navigateToLog();
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const LogPage()),
+          );
         } else if (label == '设置') {
-          _navigateToSettings();
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const SettingsPage()),
+          );
         }
       },
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            icon,
-            color: isSelected ? selectedColor : unselectedColor,
-            size: 24,
-          ),
+          Icon(icon, color: color, size: 24),
           const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              color: isSelected ? selectedColor : unselectedColor,
-            ),
-          ),
+          Text(label, style: TextStyle(fontSize: 12, color: color)),
         ],
       ),
     );
   }
 
-  Widget _buildAudioSelector() {
-    final audioSources = BuiltInAudioLibrary.sources;
-    
-    return SizedBox(
-      height: 80,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: audioSources.length + 1,
-        itemBuilder: (context, index) {
-          if (index == 0) {
-            return _buildAudioItem(null, '无');
-          }
-          final source = audioSources[index - 1];
-          return _buildAudioItem(source, source.emoji);
-        },
-      ),
+  void _createTemplate() async {
+    final result = await Navigator.push<SceneTemplate>(
+      context,
+      MaterialPageRoute(builder: (_) => const TemplateEditorPage()),
     );
+    if (result != null) {
+      _loadTemplates();
+    }
   }
 
-  Widget _buildAudioItem(SoundSource? source, String emoji) {
-    final isSelected = _selectedAudioSource?.id == source?.id;
+  void _editTemplate(SceneTemplate template) async {
+    final result = await Navigator.push<SceneTemplate>(
+      context,
+      MaterialPageRoute(builder: (_) => TemplateEditorPage(template: template)),
+    );
+    if (result != null) {
+      _loadTemplates();
+    }
+  }
+
+  void _startTemplate(SceneTemplate template) async {
+    _timelineEngine.loadTemplate(template);
+    await _timelineEngine.start();
     
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _selectedAudioSource = source;
-        });
-        if (source != null && _timerState.isIdle) {
-          _audioService.playSingle(source);
-        }
-      },
-      child: Container(
-        width: 64,
-        margin: const EdgeInsets.only(right: 12),
-        decoration: BoxDecoration(
-          color: isSelected 
-              ? LiubaiColors.inkBlack.withOpacity(0.1)
-              : LiubaiColors.liubaiWhite,
-          border: Border.all(
-            color: isSelected 
-                ? LiubaiColors.inkBlack 
-                : LiubaiColors.lightInkGray,
-            width: isSelected ? 2 : 1,
-          ),
-          borderRadius: BorderRadius.circular(12),
-        ),
+    setState(() {
+      _activeTemplate = template;
+      _timelineStatus = TimelineStatus.running;
+      _totalCycles = template.cycles;
+      _currentCycle = 1;
+      _elapsedMs = 0;
+    });
+  }
+
+  void _pauseTemplate() {
+    if (_timelineStatus == TimelineStatus.running) {
+      _timelineEngine.pause();
+      _audioService.pause();
+    } else if (_timelineStatus == TimelineStatus.paused) {
+      _timelineEngine.resume();
+      _audioService.resume();
+    }
+    setState(() {
+      _timelineStatus = _timelineStatus == TimelineStatus.running
+          ? TimelineStatus.paused
+          : TimelineStatus.running;
+    });
+  }
+
+  void _stopTemplate() async {
+    await _timelineEngine.stop();
+    await _audioService.stop();
+    
+    setState(() {
+      _activeTemplate = null;
+      _timelineStatus = TimelineStatus.idle;
+    });
+  }
+
+  void _showTemplateOptions(SceneTemplate template) {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => SafeArea(
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              emoji,
-              style: const TextStyle(fontSize: 24),
+            ListTile(
+              leading: const Icon(Icons.edit),
+              title: const Text('编辑'),
+              onTap: () {
+                Navigator.pop(context);
+                _editTemplate(template);
+              },
             ),
-            if (source != null) ...[
-              const SizedBox(height: 4),
-              Text(
-                source.name,
-                style: TextStyle(
-                  fontSize: 10,
-                  color: isSelected 
-                      ? LiubaiColors.inkBlack 
-                      : LiubaiColors.pineSmokeGray,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-            if (source == null) ...[
-              const SizedBox(height: 4),
-              Text(
-                '无',
-                style: TextStyle(
-                  fontSize: 10,
-                  color: isSelected 
-                      ? LiubaiColors.inkBlack 
-                      : LiubaiColors.pineSmokeGray,
-                ),
-              ),
-            ],
+            ListTile(
+              leading: const Icon(Icons.delete, color: LiubaiColors.cinnabarRed),
+              title: const Text('删除', style: TextStyle(color: LiubaiColors.cinnabarRed)),
+              onTap: () async {
+                Navigator.pop(context);
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('确认删除'),
+                    content: Text('确定要删除 "${template.name}" 吗？'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: const Text('取消'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: const Text('删除'),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirmed == true) {
+                  await _templateService.deleteTemplate(template.id);
+                  _loadTemplates();
+                }
+              },
+            ),
           ],
         ),
       ),

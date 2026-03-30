@@ -11,6 +11,7 @@ enum TimelineStatus {
 }
 
 class TimelineState {
+  final SceneTemplate? template;
   final TimelineStatus status;
   final int currentCycle;
   final int totalCycles;
@@ -19,6 +20,7 @@ class TimelineState {
   final int? currentSegmentIndex;
 
   const TimelineState({
+    this.template,
     required this.status,
     required this.currentCycle,
     required this.totalCycles,
@@ -28,7 +30,8 @@ class TimelineState {
   });
 
   const TimelineState.initial()
-      : status = TimelineStatus.idle,
+      : template = null,
+        status = TimelineStatus.idle,
         currentCycle = 0,
         totalCycles = 0,
         elapsedMs = 0,
@@ -36,6 +39,7 @@ class TimelineState {
         currentSegmentIndex = null;
 
   TimelineState copyWith({
+    SceneTemplate? template,
     TimelineStatus? status,
     int? currentCycle,
     int? totalCycles,
@@ -44,6 +48,7 @@ class TimelineState {
     int? currentSegmentIndex,
   }) {
     return TimelineState(
+      template: template ?? this.template,
       status: status ?? this.status,
       currentCycle: currentCycle ?? this.currentCycle,
       totalCycles: totalCycles ?? this.totalCycles,
@@ -120,6 +125,7 @@ class TimelineEngine {
 
     try {
       _state = TimelineState(
+        template: _template,
         status: TimelineStatus.running,
         currentCycle: 1,
         totalCycles: _template!.cycles,
