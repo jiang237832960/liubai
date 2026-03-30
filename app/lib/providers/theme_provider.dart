@@ -19,7 +19,9 @@ class ThemeNotifier extends StateNotifier<ThemeMode> {
   }
 
   Future<void> setThemeMode(String mode) async {
-    state = _themeModeFromString(mode);
+    final newMode = _themeModeFromString(mode);
+    Logger.i('设置主题模式: $mode -> $newMode', tag: 'Theme');
+    state = newMode;
   }
 
   ThemeMode _themeModeFromString(String mode) {

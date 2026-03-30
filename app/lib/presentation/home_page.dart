@@ -36,11 +36,15 @@ class _HomePageState extends State<HomePage> {
       if (mounted) {
         setState(() {
           _defaultDuration = settings.defaultDuration;
-          _timerState = TimerState(
-            total: Duration(minutes: settings.defaultDuration),
-            remaining: Duration(minutes: settings.defaultDuration),
-            sceneTagId: settings.defaultSceneTagId,
-          );
+          // 只有在计时器空闲时才重置 timerState
+          // 避免重置正在运行或已暂停的计时器
+          if (_timerState.isIdle) {
+            _timerState = TimerState(
+              total: Duration(minutes: settings.defaultDuration),
+              remaining: Duration(minutes: settings.defaultDuration),
+              sceneTagId: settings.defaultSceneTagId,
+            );
+          }
         });
       }
     } catch (e) {
@@ -67,7 +71,8 @@ class _HomePageState extends State<HomePage> {
 
   @override
   void dispose() {
-    _timer?.cancel();
+    // 不在这里取消 timer，让它在后台继续运行
+    // 计时器完成时会自动更新数据库
     super.dispose();
   }
 

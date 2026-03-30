@@ -275,6 +275,17 @@ class AudioService {
       if (_currentNoise != null) {
         _currentNoise!.volume = clampedVolume;
       }
+      // 同时更新所有 builtInNoises 中对应 id 的音量和 customNoises 的音量
+      for (var i = 0; i < _builtInNoises.length; i++) {
+        if (_builtInNoises[i].id == _currentNoise?.id) {
+          _builtInNoises[i].volume = clampedVolume;
+        }
+      }
+      for (var i = 0; i < _customNoises.length; i++) {
+        if (_customNoises[i].id == _currentNoise?.id) {
+          _customNoises[i].volume = clampedVolume;
+        }
+      }
       Logger.d('设置音量: $clampedVolume', tag: _tag);
     } catch (e, stackTrace) {
       Logger.e('设置音量失败', tag: _tag, error: e, stackTrace: stackTrace);
