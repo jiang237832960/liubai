@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
@@ -19,12 +20,15 @@ class DatabaseHelper {
   /// 获取数据库实例（线程安全）
   Future<Database> get database async {
     if (_database != null) return _database!;
-    final db = await _initDB(_dbName);
-    if (_database == null) {
+    if (_dbInitFuture != null) return _dbInitFuture!;
+    _dbInitFuture = _initDB(_dbName).then((db) {
       _database = db;
-    }
-    return _database!;
+      return db;
+    });
+    return _dbInitFuture!;
   }
+
+  Future<Database>? _dbInitFuture;
 
   /// 检查存储空间是否充足（至少100MB）
   Future<bool> _checkStorageSpace() async {

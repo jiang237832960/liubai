@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/logger.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../data/database.dart';
@@ -223,18 +224,27 @@ class _SceneTagSelectorState extends State<SceneTagSelector> {
             ),
             ElevatedButton(
               onPressed: () async {
-                final name = textController.text.trim();
-                if (name.isNotEmpty) {
-                  final tag = SceneTag(
-                    name: name,
-                    color: selectedColor.value,
-                    createdAt: DateTime.now(),
-                  );
-                  await DatabaseHelper.instance.insertSceneTag(tag);
-                  await _loadTags();
-                  widget.onTagsChanged?.call();
+                try {
+                  final name = textController.text.trim();
+                  if (name.isNotEmpty) {
+                    final tag = SceneTag(
+                      name: name,
+                      color: selectedColor.value,
+                      createdAt: DateTime.now(),
+                    );
+                    await DatabaseHelper.instance.insertSceneTag(tag);
+                    await _loadTags();
+                    widget.onTagsChanged?.call();
+                    if (mounted) {
+                      Navigator.pop(context);
+                    }
+                  }
+                } catch (e) {
+                  Logger.e('添加标签失败', error: e);
                   if (mounted) {
-                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('添加标签失败: $e')),
+                    );
                   }
                 }
               },

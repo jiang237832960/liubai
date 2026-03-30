@@ -15,6 +15,22 @@ class AudioPage extends StatefulWidget {
 class _AudioPageState extends State<AudioPage> {
   final AudioService _audioService = AudioService();
   final Uuid _uuid = const Uuid();
+  bool _isInitialized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initAudioService();
+  }
+
+  Future<void> _initAudioService() async {
+    await _audioService.initialize();
+    if (mounted) {
+      setState(() {
+        _isInitialized = true;
+      });
+    }
+  }
 
   @override
   void dispose() {

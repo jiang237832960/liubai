@@ -48,15 +48,25 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 
   Future<void> _updateSettings(UserSettings newSettings) async {
-    // 如果主题改变，同步更新 app theme
-    if (newSettings.themeMode != _settings.themeMode) {
-      ref.read(themeProvider.notifier).setThemeMode(newSettings.themeMode);
+    try {
+      if (newSettings.themeMode != _settings.themeMode) {
+        ref.read(themeProvider.notifier).setThemeMode(newSettings.themeMode);
+      }
+      
+      await DatabaseHelper.instance.updateSettings(newSettings);
+      if (mounted) {
+        setState(() {
+          _settings = newSettings;
+        });
+      }
+    } catch (e) {
+      Logger.e('更新设置失败', error: e);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('更新设置失败: $e')),
+        );
+      }
     }
-    
-    await DatabaseHelper.instance.updateSettings(newSettings);
-    setState(() {
-      _settings = newSettings;
-    });
   }
 
   String _getDefaultTagName() {

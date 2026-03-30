@@ -88,27 +88,38 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _startTimer() async {
-    final now = DateTime.now();
-    
-    final session = LiubaiSession(
-      startTime: now,
-      plannedDuration: _defaultDuration,
-      sceneTagId: _timerState.sceneTagId,
-      createdAt: now,
-      updatedAt: now,
-    );
-    
-    final id = await DatabaseHelper.instance.insertSession(session);
-    
-    setState(() {
-      _currentSessionId = id;
-      _timerState = _timerState.copyWith(
-        status: TimerStatus.running,
+    try {
+      final now = DateTime.now();
+      
+      final session = LiubaiSession(
         startTime: now,
+        plannedDuration: _defaultDuration,
+        sceneTagId: _timerState.sceneTagId,
+        createdAt: now,
+        updatedAt: now,
       );
-    });
+      
+      final id = await DatabaseHelper.instance.insertSession(session);
+      
+      if (!mounted) return;
+      
+      setState(() {
+        _currentSessionId = id;
+        _timerState = _timerState.copyWith(
+          status: TimerStatus.running,
+          startTime: now,
+        );
+      });
 
-    _startTimerTick();
+      _startTimerTick();
+    } catch (e) {
+      Logger.e('开始留白失败', error: e);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('开始留白失败: $e')),
+        );
+      }
+    }
   }
 
   void _pauseTimer() {
