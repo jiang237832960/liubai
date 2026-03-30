@@ -277,7 +277,7 @@ class _StatsPageState extends State<StatsPage> {
     return Container(
       decoration: BoxDecoration(
         color: LiubaiColors.lightInkGray.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         children: [
@@ -290,12 +290,14 @@ class _StatsPageState extends State<StatsPage> {
                   color: _selectedTab == 0
                       ? LiubaiColors.inkBlack
                       : Colors.transparent,
-                  borderRadius: BorderRadius.circular(4),
+                  borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   '近7天',
                   textAlign: TextAlign.center,
                   style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
                     color: _selectedTab == 0
                         ? LiubaiColors.liubaiWhite
                         : LiubaiColors.inkBlack,
@@ -313,12 +315,14 @@ class _StatsPageState extends State<StatsPage> {
                   color: _selectedTab == 1
                       ? LiubaiColors.inkBlack
                       : Colors.transparent,
-                  borderRadius: BorderRadius.circular(4),
+                  borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   '近30天',
                   textAlign: TextAlign.center,
                   style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
                     color: _selectedTab == 1
                         ? LiubaiColors.liubaiWhite
                         : LiubaiColors.inkBlack,
@@ -333,54 +337,78 @@ class _StatsPageState extends State<StatsPage> {
   }
 
   Widget _buildTrendChart() {
-    final stats = _selectedTab == 0 ? _weekStats : _monthStats;
-    final isWeek = _selectedTab == 0;
-    final barWidth = isWeek ? 36.0 : 12.0;
+    if (_selectedTab == 0) {
+      return _buildWeekChart();
+    } else {
+      return _buildMonthChart();
+    }
+  }
 
-    if (stats.isEmpty || stats.every((s) => s.totalDuration == 0)) {
-      return Container(
-        height: 200,
-        decoration: BoxDecoration(
-          color: LiubaiColors.liubaiWhite,
-          border: Border.all(color: LiubaiColors.lightInkGray),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: const Center(
-          child: Text('暂无数据', style: LiubaiTypography.caption),
-        ),
-      );
+  // 7天趋势图 - 柱状图
+  Widget _buildWeekChart() {
+    if (_weekStats.isEmpty) {
+      return _buildEmptyChart('近7天暂无数据');
     }
 
-    final maxDuration = stats.map((s) => s.totalDuration).reduce((a, b) => a > b ? a : b);
-    final maxHeight = 120.0;
+    // 计算连续天数和总时长
+    int streakDays = _calculateStreak(_weekStats);
+    int totalDuration = _weekStats.fold(0, (sum, s) => sum + s.totalDuration);
 
     return Container(
-      height: 220,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: LiubaiColors.liubaiWhite,
         border: Border.all(color: LiubaiColors.lightInkGray),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            isWeek ? '近7天趋势' : '近30天趋势',
-            style: LiubaiTypography.body,
+          // 核心激励数据
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('连续专注', style: LiubaiTypography.caption),
+                    const SizedBox(height: 4),
+                    Text(
+                      '$streakDays天',
+                      style: LiubaiTypography.h2.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('本周总时长', style: LiubaiTypography.caption),
+                    const SizedBox(height: 4),
+                    Text(
+                      _formatDuration(totalDuration),
+                      style: LiubaiTypography.h2.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
+
+          // 柱状图
           Expanded(
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: stats.length,
-              itemBuilder: (context, index) {
-                final stat = stats[index];
-                final height = maxDuration > 0
-                    ? (stat.totalDuration / maxDuration) * maxHeight
-                    : 0.0;
-                return _buildBar(stat, height, maxHeight, barWidth, isWeek);
-              },
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: _weekStats.map((stat) {
+                return _buildWeekBar(stat);
+              }).toList(),
             ),
           ),
         ],
@@ -388,52 +416,316 @@ class _StatsPageState extends State<StatsPage> {
     );
   }
 
-  Widget _buildBar(DailyStats stat, double height, double maxHeight, double barWidth, bool isWeek) {
-    return SizedBox(
-      width: barWidth + 8,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          // 时长标签
-          if (stat.totalDuration > 0)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Text(
-                stat.totalDuration >= 60
-                    ? '${stat.totalDuration ~/ 60}h'
-                    : '${stat.totalDuration}m',
-                style: const TextStyle(
-                  fontSize: 9,
-                  color: LiubaiColors.pineSmokeGray,
+  Widget _buildWeekBar(DailyStats stat) {
+    final maxDuration = _weekStats.map((s) => s.totalDuration).reduce((a, b) => a > b ? a : b);
+    final maxHeight = 100.0;
+    final height = maxDuration > 0
+        ? (stat.totalDuration / maxDuration) * maxHeight
+        : 0.0;
+    final dayName = _getDayName(stat.date);
+
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => _showDayDetail(stat),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            // 时长标签
+            if (stat.totalDuration > 0)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  stat.totalDuration >= 60
+                      ? '${stat.totalDuration ~/ 60}h'
+                      : '${stat.totalDuration}m',
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: LiubaiColors.pineSmokeGray,
+                  ),
                 ),
               ),
-            ),
 
-          // 柱状图
-          Container(
-            width: barWidth,
-            height: height > 0 ? height : 4,
-            decoration: BoxDecoration(
-              color: stat.totalDuration > 0
-                  ? LiubaiColors.inkBlack
-                  : LiubaiColors.lightInkGray,
-              borderRadius: BorderRadius.circular(2),
+            // 柱子
+            Container(
+              height: height > 0 ? height : 4,
+              decoration: BoxDecoration(
+                color: stat.totalDuration > 0
+                    ? LiubaiColors.inkBlack
+                    : LiubaiColors.lightInkGray,
+                borderRadius: BorderRadius.circular(4),
+              ),
             ),
+            const SizedBox(height: 8),
+
+            // 星期标签
+            Text(
+              dayName,
+              style: const TextStyle(
+                fontSize: 12,
+                color: LiubaiColors.pineSmokeGray,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // 30天趋势图 - 热力图日历
+  Widget _buildMonthChart() {
+    if (_monthStats.isEmpty) {
+      return _buildEmptyChart('近30天暂无数据');
+    }
+
+    // 计算连续天数和总时长
+    int streakDays = _calculateStreak(_monthStats);
+    int totalDuration = _monthStats.fold(0, (sum, s) => sum + s.totalDuration);
+    int activeDays = _monthStats.where((s) => s.totalDuration > 0).length;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: LiubaiColors.liubaiWhite,
+        border: Border.all(color: LiubaiColors.lightInkGray),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 核心激励数据
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('连续专注', style: LiubaiTypography.caption),
+                    const SizedBox(height: 4),
+                    Text(
+                      '$streakDays天',
+                      style: LiubaiTypography.h2.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('本月总时长', style: LiubaiTypography.caption),
+                    const SizedBox(height: 4),
+                    Text(
+                      _formatDuration(totalDuration),
+                      style: LiubaiTypography.h2.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('专注天数', style: LiubaiTypography.caption),
+                    const SizedBox(height: 4),
+                    Text(
+                      '$activeDays天',
+                      style: LiubaiTypography.h2.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
+          const SizedBox(height: 20),
 
+          // 星期标题
+          const Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              SizedBox(width: 30, child: Text('周一', style: TextStyle(fontSize: 10, color: LiubaiColors.pineSmokeGray))),
+              SizedBox(width: 30, child: Text('周二', style: TextStyle(fontSize: 10, color: LiubaiColors.pineSmokeGray))),
+              SizedBox(width: 30, child: Text('周三', style: TextStyle(fontSize: 10, color: LiubaiColors.pineSmokeGray))),
+              SizedBox(width: 30, child: Text('周四', style: TextStyle(fontSize: 10, color: LiubaiColors.pineSmokeGray))),
+              SizedBox(width: 30, child: Text('周五', style: TextStyle(fontSize: 10, color: LiubaiColors.pineSmokeGray))),
+              SizedBox(width: 30, child: Text('周六', style: TextStyle(fontSize: 10, color: LiubaiColors.pineSmokeGray))),
+              SizedBox(width: 30, child: Text('周日', style: TextStyle(fontSize: 10, color: LiubaiColors.pineSmokeGray))),
+            ],
+          ),
           const SizedBox(height: 8),
 
-          // 日期标签
-          Text(
-            _formatShortDate(stat.date),
-            style: const TextStyle(
-              fontSize: 9,
-              color: LiubaiColors.pineSmokeGray,
-            ),
+          // 热力图网格
+          Expanded(
+            child: _buildHeatmapGrid(),
           ),
         ],
       ),
     );
+  }
+
+  Widget _buildHeatmapGrid() {
+    if (_monthStats.isEmpty) return const SizedBox();
+
+    // 找到第一个日期是星期几
+    final firstDate = DateTime.parse(_monthStats.first.date);
+    final firstWeekday = firstDate.weekday; // 1=周一, 7=周日
+
+    // 计算最大时长用于颜色渐变
+    final maxDuration = _monthStats.map((s) => s.totalDuration).reduce((a, b) => a > b ? a : b);
+
+    List<Widget> rows = [];
+    List<DailyStats?> weekCells = [];
+
+    // 填充第一周前面空白的日期
+    for (int i = 1; i < firstWeekday; i++) {
+      weekCells.add(null);
+    }
+
+    for (var stat in _monthStats) {
+      weekCells.add(stat);
+
+      if (weekCells.length == 7) {
+        rows.add(_buildHeatmapRow(weekCells, maxDuration));
+        weekCells = [];
+      }
+    }
+
+    // 处理最后一周
+    if (weekCells.isNotEmpty) {
+      while (weekCells.length < 7) {
+        weekCells.add(null);
+      }
+      rows.add(_buildHeatmapRow(weekCells, maxDuration));
+    }
+
+    return Column(
+      children: rows.map((row) => Expanded(child: row)).toList(),
+    );
+  }
+
+  Widget _buildHeatmapRow(List<DailyStats?> weekCells, int maxDuration) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceAround,
+      children: weekCells.map((stat) {
+        if (stat == null) {
+          return const Expanded(child: SizedBox());
+        }
+        return Expanded(child: _buildHeatmapCell(stat, maxDuration));
+      }).toList(),
+    );
+  }
+
+  Widget _buildHeatmapCell(DailyStats stat, int maxDuration) {
+    final intensity = maxDuration > 0 ? (stat.totalDuration / maxDuration) : 0.0;
+    final color = stat.totalDuration > 0
+        ? LiubaiColors.inkBlack.withOpacity(0.3 + intensity * 0.7)
+        : LiubaiColors.lightInkGray.withOpacity(0.3);
+
+    return GestureDetector(
+      onTap: () => _showDayDetail(stat),
+      child: Container(
+        margin: const EdgeInsets.all(2),
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: AspectRatio(
+          aspectRatio: 1,
+          child: Center(
+            child: Text(
+              int.parse(stat.date.split('-').last).toString(),
+              style: TextStyle(
+                fontSize: 10,
+                color: stat.totalDuration > 0
+                    ? LiubaiColors.liubaiWhite
+                    : LiubaiColors.pineSmokeGray,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyChart(String message) {
+    return Container(
+      height: 200,
+      decoration: BoxDecoration(
+        color: LiubaiColors.liubaiWhite,
+        border: Border.all(color: LiubaiColors.lightInkGray),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Center(
+        child: Text(message, style: LiubaiTypography.caption),
+      ),
+    );
+  }
+
+  void _showDayDetail(DailyStats stat) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: LiubaiColors.liubaiWhite,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${stat.date.split('-')[1]}月${stat.date.split('-').last}日',
+              style: LiubaiTypography.h2,
+            ),
+            const SizedBox(height: 24),
+            _buildDetailRow('专注时长', _formatDuration(stat.totalDuration)),
+            _buildDetailRow('专注次数', '${stat.sessionCount}次'),
+            _buildDetailRow('完成次数', '${stat.completedCount}次'),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: LiubaiTypography.body),
+          Text(value, style: LiubaiTypography.h2),
+        ],
+      ),
+    );
+  }
+
+  int _calculateStreak(List<DailyStats> stats) {
+    if (stats.isEmpty) return 0;
+
+    int streak = 0;
+    // 从最后一天往前数
+    for (int i = stats.length - 1; i >= 0; i--) {
+      if (stats[i].totalDuration > 0) {
+        streak++;
+      } else {
+        break;
+      }
+    }
+    return streak;
+  }
+
+  String _getDayName(String dateStr) {
+    final date = DateTime.parse(dateStr);
+    const days = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+    return days[date.weekday - 1];
   }
 
   Widget _buildDetailStats() {
