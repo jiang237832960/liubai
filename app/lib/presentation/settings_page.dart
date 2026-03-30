@@ -4,9 +4,10 @@ import '../core/logger.dart';
 import '../core/theme.dart';
 import '../data/database.dart';
 import '../data/models.dart';
+import '../data/models/scene_template.dart';
 import '../providers/theme_provider.dart';
+import '../services/template_service.dart';
 import 'audio_page.dart';
-import 'widgets/scene_tag_selector.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
@@ -16,8 +17,9 @@ class SettingsPage extends ConsumerStatefulWidget {
 }
 
 class _SettingsPageState extends ConsumerState<SettingsPage> {
+  final _templateService = TemplateService();
   UserSettings _settings = UserSettings();
-  List<SceneTag> _tags = [];
+  List<SceneTemplate> _templates = [];
   bool _isLoading = true;
 
   @override
@@ -29,11 +31,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   Future<void> _loadData() async {
     try {
       final settings = await DatabaseHelper.instance.getSettings();
-      final tags = await DatabaseHelper.instance.getAllSceneTags();
+      final templates = await _templateService.getAllTemplates();
       if (mounted) {
         setState(() {
           _settings = settings;
-          _tags = tags;
+          _templates = templates;
           _isLoading = false;
         });
       }
@@ -69,13 +71,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     }
   }
 
-  String _getDefaultTagName() {
-    if (_settings.defaultSceneTagId == null) {
+  String _getDefaultTemplateName() {
+    if (_settings.defaultSceneTemplateId == null) {
       return '无';
     }
     try {
-      final tag = _tags.firstWhere((t) => t.id == _settings.defaultSceneTagId);
-      return tag.name;
+      final template = _templates.firstWhere((t) => t.id == _settings.defaultSceneTemplateId);
+      return '${template.emoji} ${template.name}';
     } catch (e) {
       return '无';
     }
@@ -95,7 +97,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                // 留白设置
                 _buildSectionTitle('留白设置'),
                 _buildSettingCard(
                   title: '默认时长',
@@ -104,13 +105,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 ),
                 _buildSettingCard(
                   title: '默认场景',
-                  subtitle: _getDefaultTagName(),
-                  onTap: _showDefaultTagPicker,
+                  subtitle: _getDefaultTemplateName(),
+                  onTap: _showDefaultTemplatePicker,
                 ),
 
                 const SizedBox(height: 24),
 
-                // 提醒设置
                 _buildSectionTitle('提醒设置'),
                 _buildSwitchCard(
                   title: '声音提醒',
@@ -131,7 +131,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
                 const SizedBox(height: 24),
 
-                // 留白音
                 _buildSectionTitle('留白音'),
                 _buildSettingCard(
                   title: '留白音',
@@ -141,7 +140,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
                 const SizedBox(height: 24),
 
-                // 外观设置
                 _buildSectionTitle('外观设置'),
                 _buildSettingCard(
                   title: '主题模式',
@@ -151,7 +149,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
                 const SizedBox(height: 24),
 
-                // 关于
                 _buildSectionTitle('关于'),
                 _buildInfoCard(
                   title: '版本',
@@ -297,7 +294,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     );
   }
 
-  void _showDefaultTagPicker() {
+  void _showDefaultTemplatePicker() {
     showModalBottomSheet(
       context: context,
       builder: (context) {
@@ -309,38 +306,29 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             children: [
               const Text('选择默认场景', style: LiubaiTypography.h2),
               const SizedBox(height: 8),
-              const Text('开始留白时自动选择的场景标签', style: LiubaiTypography.caption),
+              const Text('开始留白时自动选择的场景', style: LiubaiTypography.caption),
               const SizedBox(height: 24),
-              // 无标签选项
               ListTile(
                 title: const Text('无', style: LiubaiTypography.body),
-                trailing: _settings.defaultSceneTagId == null
+                trailing: _settings.defaultSceneTemplateId == null
                     ? const Icon(Icons.check, color: LiubaiColors.inkBlack)
                     : null,
                 onTap: () {
-                  _updateSettings(_settings.copyWith(defaultSceneTagId: null));
+                  _updateSettings(_settings.copyWith(defaultSceneTemplateId: null));
                   Navigator.pop(context);
                 },
               ),
               const Divider(),
-              // 标签列表
-              ..._tags.map((tag) {
-                final isSelected = _settings.defaultSceneTagId == tag.id;
+              ..._templates.map((template) {
+                final isSelected = _settings.defaultSceneTemplateId == template.id;
                 return ListTile(
-                  leading: Container(
-                    width: 16,
-                    height: 16,
-                    decoration: BoxDecoration(
-                      color: tag.colorValue,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  title: Text(tag.name, style: LiubaiTypography.body),
+                  leading: Text(template.emoji, style: const TextStyle(fontSize: 20)),
+                  title: Text(template.name, style: LiubaiTypography.body),
                   trailing: isSelected
                       ? const Icon(Icons.check, color: LiubaiColors.inkBlack)
                       : null,
                   onTap: () {
-                    _updateSettings(_settings.copyWith(defaultSceneTagId: tag.id));
+                    _updateSettings(_settings.copyWith(defaultSceneTemplateId: template.id));
                     Navigator.pop(context);
                   },
                 );

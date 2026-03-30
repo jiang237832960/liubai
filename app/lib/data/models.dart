@@ -5,10 +5,10 @@ class LiubaiSession {
   final int? id;
   final DateTime startTime;
   final DateTime? endTime;
-  final int plannedDuration; // 计划时长（分钟）
-  final int? actualDuration; // 实际时长（分钟）
+  final int plannedDuration; // 计划专注时长（分钟）
+  final int? actualDuration; // 实际专注时长（分钟）
   final bool isCompleted;
-  final int? sceneTagId; // 场景标签ID
+  final String? sceneTemplateId; // 场景模板ID（替代原 sceneTagId）
   final String? note;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -20,7 +20,7 @@ class LiubaiSession {
     required this.plannedDuration,
     this.actualDuration,
     this.isCompleted = false,
-    this.sceneTagId,
+    this.sceneTemplateId,
     this.note,
     required this.createdAt,
     required this.updatedAt,
@@ -34,7 +34,7 @@ class LiubaiSession {
       'planned_duration': plannedDuration,
       'actual_duration': actualDuration,
       'is_completed': isCompleted ? 1 : 0,
-      'scene_tag_id': sceneTagId,
+      'scene_template_id': sceneTemplateId,
       'note': note,
       'created_at': createdAt.millisecondsSinceEpoch,
       'updated_at': updatedAt.millisecondsSinceEpoch,
@@ -51,7 +51,7 @@ class LiubaiSession {
       plannedDuration: map['planned_duration'],
       actualDuration: map['actual_duration'],
       isCompleted: map['is_completed'] == 1,
-      sceneTagId: map['scene_tag_id'],
+      sceneTemplateId: map['scene_template_id'] as String?,
       note: map['note'],
       createdAt: DateTime.fromMillisecondsSinceEpoch(map['created_at']),
       updatedAt: DateTime.fromMillisecondsSinceEpoch(map['updated_at']),
@@ -65,7 +65,7 @@ class LiubaiSession {
     int? plannedDuration,
     int? actualDuration,
     bool? isCompleted,
-    int? sceneTagId,
+    String? sceneTemplateId,
     String? note,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -77,7 +77,7 @@ class LiubaiSession {
       plannedDuration: plannedDuration ?? this.plannedDuration,
       actualDuration: actualDuration ?? this.actualDuration,
       isCompleted: isCompleted ?? this.isCompleted,
-      sceneTagId: sceneTagId ?? this.sceneTagId,
+      sceneTemplateId: sceneTemplateId ?? this.sceneTemplateId,
       note: note ?? this.note,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -230,7 +230,7 @@ class UserSettings {
   final bool enableSound;
   final bool enableNotification;
   final String themeMode; // 'light', 'dark', 'system'
-  final int? defaultSceneTagId; // 默认场景标签ID
+  final String? defaultSceneTemplateId; // 默认场景模板ID
 
   UserSettings({
     this.id = 1,
@@ -238,7 +238,7 @@ class UserSettings {
     this.enableSound = true,
     this.enableNotification = true,
     this.themeMode = 'system',
-    this.defaultSceneTagId,
+    this.defaultSceneTemplateId,
   });
 
   Map<String, dynamic> toMap() {
@@ -248,7 +248,7 @@ class UserSettings {
       'enable_sound': enableSound ? 1 : 0,
       'enable_notification': enableNotification ? 1 : 0,
       'theme_mode': themeMode,
-      'default_scene_tag_id': defaultSceneTagId,
+      'default_scene_template_id': defaultSceneTemplateId,
     };
   }
 
@@ -259,7 +259,7 @@ class UserSettings {
       enableSound: map['enable_sound'] == 1,
       enableNotification: map['enable_notification'] == 1,
       themeMode: map['theme_mode'],
-      defaultSceneTagId: map['default_scene_tag_id'],
+      defaultSceneTemplateId: map['default_scene_template_id'] as String?,
     );
   }
 
@@ -269,7 +269,7 @@ class UserSettings {
     bool? enableSound,
     bool? enableNotification,
     String? themeMode,
-    int? defaultSceneTagId,
+    String? defaultSceneTemplateId,
   }) {
     return UserSettings(
       id: id ?? this.id,
@@ -277,7 +277,7 @@ class UserSettings {
       enableSound: enableSound ?? this.enableSound,
       enableNotification: enableNotification ?? this.enableNotification,
       themeMode: themeMode ?? this.themeMode,
-      defaultSceneTagId: defaultSceneTagId ?? this.defaultSceneTagId,
+      defaultSceneTemplateId: defaultSceneTemplateId ?? this.defaultSceneTemplateId,
     );
   }
 }
@@ -296,14 +296,14 @@ class TimerState {
   final Duration remaining;
   final Duration total;
   final DateTime? startTime;
-  final int? sceneTagId; // 当前选择的场景标签
+  final String? sceneTemplateId; // 当前选择的场景模板ID
 
   TimerState({
     this.status = TimerStatus.idle,
     this.remaining = const Duration(minutes: 25),
     this.total = const Duration(minutes: 25),
     this.startTime,
-    this.sceneTagId,
+    this.sceneTemplateId,
   });
 
   TimerState copyWith({
@@ -311,14 +311,14 @@ class TimerState {
     Duration? remaining,
     Duration? total,
     DateTime? startTime,
-    int? sceneTagId,
+    String? sceneTemplateId,
   }) {
     return TimerState(
       status: status ?? this.status,
       remaining: remaining ?? this.remaining,
       total: total ?? this.total,
       startTime: startTime ?? this.startTime,
-      sceneTagId: sceneTagId ?? this.sceneTagId,
+      sceneTemplateId: sceneTemplateId ?? this.sceneTemplateId,
     );
   }
 

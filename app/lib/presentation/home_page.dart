@@ -2,8 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../core/logger.dart';
 import '../core/theme.dart';
-import '../core/utils.dart';
 import '../data/database.dart';
+import '../data/models.dart';
 import '../data/models/scene_template.dart';
 import '../services/audio_service.dart';
 import '../services/template_service.dart';
@@ -27,11 +27,13 @@ class _HomePageState extends State<HomePage> {
   List<SceneTemplate> _templates = [];
   SceneTemplate? _activeTemplate;
   bool _isLoading = true;
+  bool _showSceneSelector = false;
   TimelineStatus _timelineStatus = TimelineStatus.idle;
   int _elapsedMs = 0;
   int _currentCycle = 1;
   int _totalCycles = 1;
   SegmentType? _currentSegmentType;
+  DateTime? _sessionStartTime;
 
   @override
   void initState() {
@@ -104,31 +106,70 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: LiubaiColors.liubaiWhite,
-      body: _timelineStatus == TimelineStatus.idle
-          ? _buildIdleView()
-          : _buildRunningView(),
+      body: _buildBody(),
     );
+  }
+
+  Widget _buildBody() {
+    if (_timelineStatus != TimelineStatus.idle) {
+      return _buildRunningView();
+    }
+    
+    if (_showSceneSelector) {
+      return _buildSceneSelectorView();
+    }
+    
+    return _buildIdleView();
   }
 
   Widget _buildIdleView() {
     return SafeArea(
       child: Column(
         children: [
-          _buildHeader(),
-          Expanded(child: _buildContent()),
+          const Spacer(flex: 2),
+          const Text('留白', style: LiubaiTypography.brand),
+          const Spacer(flex: 1),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 48),
+            child: SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _templates.isEmpty ? _createTemplate : () => setState(() => _showSceneSelector = true),
+                child: Text(_templates.isEmpty ? '创建场景' : '开始留白'),
+              ),
+            ),
+          ),
+          const Spacer(flex: 2),
           _buildBottomNav(),
         ],
       ),
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildSceneSelectorView() {
+    return SafeArea(
+      child: Column(
+        children: [
+          _buildSceneSelectorHeader(),
+          Expanded(child: _buildSceneList()),
+          _buildBottomNav(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSceneSelectorHeader() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const Text('留白', style: LiubaiTypography.h1),
+          IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () => setState(() => _showSceneSelector = false),
+            color: LiubaiColors.pineSmokeGray,
+          ),
+          const Text('选择场景', style: LiubaiTypography.h2),
           IconButton(
             icon: const Icon(Icons.add_circle_outline),
             onPressed: _createTemplate,
@@ -139,64 +180,48 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildContent() {
+  Widget _buildSceneList() {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
 
     if (_templates.isEmpty) {
-      return _buildEmptyState();
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.spa_outlined,
+              size: 48,
+              color: LiubaiColors.lightInkGray,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              '创建你的专注场景',
+              style: LiubaiTypography.caption,
+            ),
+          ],
+        ),
+      );
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      itemCount: _templates.length + 1,
-      itemBuilder: (context, index) {
-        if (index == _templates.length) {
-          return const SizedBox(height: 100);
-        }
-        return _buildTemplateItem(_templates[index]);
-      },
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.spa_outlined,
-            size: 48,
-            color: LiubaiColors.lightInkGray,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            '创建你的专注场景',
-            style: LiubaiTypography.caption,
-          ),
-          const SizedBox(height: 24),
-          TextButton(
-            onPressed: _createTemplate,
-            child: const Text('+ 创建场景'),
-          ),
-        ],
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+      itemCount: _templates.length,
+      itemBuilder: (context, index) => _buildTemplateItem(_templates[index]),
     );
   }
 
   Widget _buildTemplateItem(SceneTemplate template) {
-    final totalMinutes = template.totalDurationMs ~/ 60000;
-
     return GestureDetector(
       onTap: () => _startTemplate(template),
       onLongPress: () => _showOptions(template),
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           border: Border.all(color: LiubaiColors.lightInkGray),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
           children: [
@@ -215,9 +240,10 @@ class _HomePageState extends State<HomePage> {
                 ],
               ),
             ),
-            const Icon(
+            Icon(
               Icons.play_circle_outline,
               color: LiubaiColors.pineSmokeGray,
+              size: 28,
             ),
           ],
         ),
@@ -243,7 +269,7 @@ class _HomePageState extends State<HomePage> {
       backgroundColor: LiubaiColors.liubaiWhite,
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(32),
           child: Column(
             children: [
               Row(
@@ -259,26 +285,29 @@ class _HomePageState extends State<HomePage> {
               ),
               const Spacer(),
               SizedBox(
-                width: 240,
-                height: 240,
+                width: 260,
+                height: 260,
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
-                    CircularProgressIndicator(
-                      value: progress,
-                      strokeWidth: 2,
-                      backgroundColor: LiubaiColors.lightInkGray.withOpacity(0.3),
-                      valueColor: AlwaysStoppedAnimation(LiubaiColors.inkBlack),
+                    SizedBox(
+                      width: 260,
+                      height: 260,
+                      child: CircularProgressIndicator(
+                        value: progress,
+                        strokeWidth: 2,
+                        backgroundColor: LiubaiColors.lightInkGray.withOpacity(0.3),
+                        valueColor: AlwaysStoppedAnimation(LiubaiColors.inkBlack),
+                      ),
                     ),
                     Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
                           '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}',
-                          style: const TextStyle(
-                            fontSize: 48,
-                            fontWeight: FontWeight.w200,
-                            letterSpacing: 4,
+                          style: LiubaiTypography.timer.copyWith(
+                            fontSize: 56,
+                            letterSpacing: 2,
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -316,11 +345,11 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildBottomNav() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(vertical: 16),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _buildNavItem('场景', Icons.spa_outlined, true),
+          _buildNavItem('留白', Icons.spa_outlined, true),
           _buildNavItem('日志', Icons.menu_book_outlined, false),
           _buildNavItem('设置', Icons.settings_outlined, false),
         ],
@@ -350,10 +379,7 @@ class _HomePageState extends State<HomePage> {
         children: [
           Icon(icon, color: color, size: 24),
           const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(fontSize: 12, color: color),
-          ),
+          Text(label, style: TextStyle(fontSize: 12, color: color)),
         ],
       ),
     );
@@ -376,6 +402,8 @@ class _HomePageState extends State<HomePage> {
       _totalCycles = template.cycles;
       _currentCycle = 1;
       _elapsedMs = 0;
+      _showSceneSelector = false;
+      _sessionStartTime = DateTime.now();
     });
   }
 
@@ -395,11 +423,41 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _stopTemplate() async {
+    final template = _activeTemplate;
+    final startTime = _sessionStartTime;
+    final elapsed = _elapsedMs;
+    final isCompleted = _timelineStatus == TimelineStatus.completed;
+    
     await _timelineEngine.stop();
     await _audioService.stop();
+    
+    if (template != null && startTime != null) {
+      final plannedMinutes = template.totalDurationMs ~/ 60000;
+      final actualMinutes = elapsed ~/ 60000;
+      
+      final session = LiubaiSession(
+        startTime: startTime,
+        endTime: DateTime.now(),
+        plannedDuration: plannedMinutes,
+        actualDuration: actualMinutes,
+        isCompleted: isCompleted,
+        sceneTemplateId: template.id,
+        createdAt: startTime,
+        updatedAt: DateTime.now(),
+      );
+      
+      try {
+        await DatabaseHelper.instance.insertSession(session);
+        Logger.i('保存留白会话成功', tag: 'HomePage');
+      } catch (e) {
+        Logger.e('保存留白会话失败', tag: 'HomePage', error: e);
+      }
+    }
+    
     setState(() {
       _activeTemplate = null;
       _timelineStatus = TimelineStatus.idle;
+      _sessionStartTime = null;
     });
   }
 

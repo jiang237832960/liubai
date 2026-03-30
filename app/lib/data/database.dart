@@ -124,9 +124,10 @@ class DatabaseHelper {
 
       final db = await openDatabase(
         path,
-        version: 1,
+        version: 2,
         onCreate: _onCreateDB,
         onOpen: _onOpenDB,
+        onUpgrade: _onUpgradeDB,
       );
 
       return db;
@@ -152,6 +153,47 @@ class DatabaseHelper {
   Future<void> _onOpenDB(Database db) async {
     Logger.i('数据库已打开，检查表结构', tag: _tag);
     await _ensureTablesExist(db);
+  }
+
+  /// 数据库版本升级时调用
+  Future<void> _onUpgradeDB(Database db, int oldVersion, int newVersion) async {
+    Logger.i('数据库升级: $oldVersion -> $newVersion', tag: _tag);
+    
+    if (oldVersion < 2) {
+      // 添加 scene_template_id 字段到 sessions 表
+      await _upgradeToV2(db);
+    }
+  }
+
+  /// 升级到版本2：添加 scene_template_id 字段
+  Future<void> _upgradeToV2(Database db) async {
+    try {
+      // 检查 sessions 表是否有 scene_template_id 列
+      final columns = await db.rawQuery("PRAGMA table_info(sessions)");
+      final columnNames = columns.map((c) => c['name'] as String).toSet();
+      
+      if (!columnNames.contains('scene_template_id')) {
+        Logger.i('添加 scene_template_id 字段到 sessions 表', tag: _tag);
+        await db.execute('''
+          ALTER TABLE sessions ADD COLUMN scene_template_id TEXT
+        ''');
+      }
+      
+      // 检查 settings 表是否有 default_scene_template_id 列
+      final settingsColumns = await db.rawQuery("PRAGMA table_info(settings)");
+      final settingsColumnNames = settingsColumns.map((c) => c['name'] as String).toSet();
+      
+      if (!settingsColumnNames.contains('default_scene_template_id')) {
+        Logger.i('添加 default_scene_template_id 字段到 settings 表', tag: _tag);
+        await db.execute('''
+          ALTER TABLE settings ADD COLUMN default_scene_template_id TEXT
+        ''');
+      }
+      
+      Logger.i('数据库 V2 升级完成', tag: _tag);
+    } catch (e, stackTrace) {
+      Logger.e('数据库 V2 升级失败', tag: _tag, error: e, stackTrace: stackTrace);
+    }
   }
 
   /// 确保必要的表存在
@@ -301,11 +343,10 @@ class DatabaseHelper {
         planned_duration INTEGER NOT NULL,
         actual_duration INTEGER,
         is_completed INTEGER DEFAULT 0,
-        scene_tag_id INTEGER,
+        scene_template_id TEXT,
         note TEXT,
         created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL,
-        FOREIGN KEY (scene_tag_id) REFERENCES scene_tags(id) ON DELETE SET NULL
+        updated_at INTEGER NOT NULL
       )
     ''');
 
@@ -317,8 +358,7 @@ class DatabaseHelper {
         enable_sound INTEGER DEFAULT 1,
         enable_notification INTEGER DEFAULT 1,
         theme_mode TEXT DEFAULT 'system',
-        default_scene_tag_id INTEGER,
-        FOREIGN KEY (default_scene_tag_id) REFERENCES scene_tags(id) ON DELETE SET NULL
+        default_scene_template_id TEXT
       )
     ''');
 
@@ -329,7 +369,7 @@ class DatabaseHelper {
       'enable_sound': 1,
       'enable_notification': 1,
       'theme_mode': 'system',
-      'default_scene_tag_id': null,
+      'default_scene_template_id': null,
     });
     Logger.i('数据库表创建完成', tag: _tag);
   }
@@ -722,7 +762,29 @@ class DatabaseHelper {
     }
   }
 
-  /// 按标签获取会话
+  /// 按场景模板获取会话
+  Future<List<LiubaiSession>> getSessionsByTemplate(String templateId) async {
+    try {
+      final db = await database;
+      final maps = await db.query(
+        'sessions',
+        where: 'scene_template_id = ?',
+        whereArgs: [templateId],
+        orderBy: 'start_time DESC',
+      );
+      Logger.d('按场景模板获取会话: templateId=$templateId, ${maps.length}条', tag: _tag);
+      return maps.map((map) => LiubaiSession.fromMap(map)).toList();
+    } catch (e, stackTrace) {
+      Logger.e('按场景模板获取会话失败: templateId=$templateId', tag: _tag, error: e, stackTrace: stackTrace);
+      throw app_exceptions.DatabaseException(
+        '按场景模板获取会话失败',
+        code: 'DB_QUERY_ERROR',
+        originalError: e,
+      );
+    }
+  }
+
+  /// 按标签获取会话（兼容旧版本）
   Future<List<LiubaiSession>> getSessionsByTag(int tagId) async {
     try {
       final db = await database;
@@ -738,6 +800,30 @@ class DatabaseHelper {
       Logger.e('按标签获取会话失败: tagId=$tagId', tag: _tag, error: e, stackTrace: stackTrace);
       throw app_exceptions.DatabaseException(
         '按标签获取会话失败',
+        code: 'DB_QUERY_ERROR',
+        originalError: e,
+      );
+    }
+  }
+
+  /// 获取场景模板统计
+  Future<Map<String, dynamic>> getTemplateStats(String templateId) async {
+    try {
+      final db = await database;
+      final result = await db.rawQuery('''
+        SELECT 
+          COUNT(*) as session_count,
+          SUM(actual_duration) as total_duration,
+          SUM(CASE WHEN is_completed = 1 THEN 1 ELSE 0 END) as completed_count
+        FROM sessions
+        WHERE scene_template_id = ?
+      ''', [templateId]);
+      
+      return result.first;
+    } catch (e, stackTrace) {
+      Logger.e('获取场景模板统计失败: templateId=$templateId', tag: _tag, error: e, stackTrace: stackTrace);
+      throw app_exceptions.DatabaseException(
+        '获取场景模板统计失败',
         code: 'DB_QUERY_ERROR',
         originalError: e,
       );
@@ -781,11 +867,45 @@ class DatabaseHelper {
     }
   }
 
-  /// 获取所有标签的分布统计
+  /// 获取所有场景模板的分布统计
+  Future<List<Map<String, dynamic>>> getTemplateDistribution() async {
+    try {
+      final db = await database;
+      final result = await db.rawQuery('''
+        SELECT 
+          st.id,
+          st.name,
+          st.emoji,
+          COUNT(s.id) as session_count,
+          SUM(COALESCE(s.actual_duration, 0)) as total_duration
+        FROM scene_templates st
+        LEFT JOIN sessions s ON st.id = s.scene_template_id
+        GROUP BY st.id
+        ORDER BY total_duration DESC
+      ''');
+
+      Logger.d('获取场景模板分布统计成功: ${result.length}个场景', tag: _tag);
+      return result.map((map) => {
+        'id': map['id'],
+        'name': map['name'],
+        'emoji': map['emoji'] ?? '📋',
+        'sessionCount': map['session_count'] as int? ?? 0,
+        'totalDuration': map['total_duration'] as int? ?? 0,
+      }).toList();
+    } catch (e, stackTrace) {
+      Logger.e('获取场景模板分布统计失败', tag: _tag, error: e, stackTrace: stackTrace);
+      throw app_exceptions.DatabaseException(
+        '获取场景模板分布统计失败',
+        code: 'DB_STATS_ERROR',
+        originalError: e,
+      );
+    }
+  }
+
+  /// 获取所有标签的分布统计（兼容旧版本）
   Future<List<Map<String, dynamic>>> getTagDistribution() async {
     try {
       final db = await database;
-      // 统计所有session的实际时长，无论是否完成
       final result = await db.rawQuery('''
         SELECT 
           st.id,

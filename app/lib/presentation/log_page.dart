@@ -3,8 +3,10 @@ import '../core/theme.dart';
 import '../core/utils.dart';
 import '../data/database.dart';
 import '../data/models.dart';
+import '../data/models/scene_template.dart';
+import '../services/template_service.dart';
 import 'stats_page.dart';
-import 'widgets/scene_tag_selector.dart';
+import 'widgets/scene_template_selector.dart';
 
 class LogPage extends StatefulWidget {
   const LogPage({super.key});
@@ -14,11 +16,12 @@ class LogPage extends StatefulWidget {
 }
 
 class _LogPageState extends State<LogPage> {
+  final _templateService = TemplateService();
   List<LiubaiSession> _sessions = [];
-  List<SceneTag> _tags = [];
+  List<SceneTemplate> _templates = [];
   DailyStats? _todayStats;
   bool _isLoading = true;
-  int? _selectedFilterTagId;
+  String? _selectedFilterTemplateId;
 
   @override
   void initState() {
@@ -36,11 +39,11 @@ class _LogPageState extends State<LogPage> {
     setState(() => _isLoading = true);
 
     try {
-      final tags = await DatabaseHelper.instance.getAllSceneTags();
+      final templates = await _templateService.getAllTemplates();
       List<LiubaiSession> sessions;
 
-      if (_selectedFilterTagId != null) {
-        sessions = await DatabaseHelper.instance.getSessionsByTag(_selectedFilterTagId!);
+      if (_selectedFilterTemplateId != null) {
+        sessions = await DatabaseHelper.instance.getSessionsByTemplate(_selectedFilterTemplateId!);
       } else {
         sessions = await DatabaseHelper.instance.getAllSessions();
       }
@@ -48,7 +51,7 @@ class _LogPageState extends State<LogPage> {
       final stats = await DatabaseHelper.instance.getTodayStats();
 
       setState(() {
-        _tags = tags;
+        _templates = templates;
         _sessions = sessions;
         _todayStats = stats;
         _isLoading = false;
@@ -58,17 +61,17 @@ class _LogPageState extends State<LogPage> {
     }
   }
 
-  void _onFilterTagSelected(int? tagId) {
+  void _onFilterTemplateSelected(String? templateId) {
     setState(() {
-      _selectedFilterTagId = tagId;
+      _selectedFilterTemplateId = templateId;
     });
     _loadData();
   }
 
-  SceneTag? _getTagById(int? tagId) {
-    if (tagId == null) return null;
+  SceneTemplate? _getTemplateById(String? templateId) {
+    if (templateId == null) return null;
     try {
-      return _tags.firstWhere((tag) => tag.id == tagId);
+      return _templates.firstWhere((t) => t.id == templateId);
     } catch (e) {
       return null;
     }
@@ -94,15 +97,15 @@ class _LogPageState extends State<LogPage> {
     final theme = Theme.of(context);
     
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
+      backgroundColor: LiubaiColors.liubaiWhite,
       appBar: AppBar(
-        title: Text('留白日志', style: theme.textTheme.headlineMedium),
-        backgroundColor: theme.appBarTheme.backgroundColor,
-        foregroundColor: theme.appBarTheme.foregroundColor,
+        title: const Text('留白日志', style: LiubaiTypography.h2),
+        backgroundColor: LiubaiColors.liubaiWhite,
+        foregroundColor: LiubaiColors.inkBlack,
         elevation: 0,
         actions: [
           IconButton(
-            icon: Icon(Icons.bar_chart, color: theme.appBarTheme.foregroundColor),
+            icon: const Icon(Icons.bar_chart),
             onPressed: _navigateToStats,
           ),
         ],
@@ -111,13 +114,8 @@ class _LogPageState extends State<LogPage> {
           ? const Center(child: CircularProgressIndicator())
           : Column(
               children: [
-                // 今日统计
                 if (_todayStats != null) _buildTodayStats(),
-
-                // 标签筛选器
-                if (_tags.isNotEmpty) _buildTagFilter(),
-
-                // 留白记录列表
+                if (_templates.isNotEmpty) _buildTemplateFilter(),
                 Expanded(
                   child: _sessions.isEmpty
                       ? _buildEmptyState()
@@ -168,7 +166,7 @@ class _LogPageState extends State<LogPage> {
     );
   }
 
-  Widget _buildTagFilter() {
+  Widget _buildTemplateFilter() {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.all(12),
@@ -180,15 +178,15 @@ class _LogPageState extends State<LogPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '筛选标签',
+          const Text(
+            '筛选场景',
             style: LiubaiTypography.caption,
           ),
           const SizedBox(height: 8),
-          SceneTagSelector(
-            selectedTagId: _selectedFilterTagId,
-            onTagSelected: _onFilterTagSelected,
-            showAddButton: false,
+          SceneTemplateSelector(
+            selectedTemplateId: _selectedFilterTemplateId,
+            onTemplateSelected: _onFilterTemplateSelected,
+            showAllOption: true,
           ),
         ],
       ),
@@ -212,7 +210,7 @@ class _LogPageState extends State<LogPage> {
           ),
           const SizedBox(height: 8),
           Text(
-            _selectedFilterTagId != null ? '该标签下暂无记录' : '开始你的第一次留白吧',
+            _selectedFilterTemplateId != null ? '该场景下暂无记录' : '开始你的第一次留白吧',
             style: LiubaiTypography.caption,
           ),
         ],
@@ -232,7 +230,7 @@ class _LogPageState extends State<LogPage> {
   }
 
   Widget _buildSessionCard(LiubaiSession session) {
-    final tag = _getTagById(session.sceneTagId);
+    final template = _getTemplateById(session.sceneTemplateId);
     final progress = session.plannedDuration > 0
         ? ((session.actualDuration ?? 0) / session.plannedDuration * 100).clamp(0, 100).toInt()
         : 0;
@@ -247,7 +245,6 @@ class _LogPageState extends State<LogPage> {
       ),
       child: Row(
         children: [
-          // 时间和标签
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -268,18 +265,34 @@ class _LogPageState extends State<LogPage> {
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    // 标签
-                    if (tag != null) ...[
-                      SceneTagChip(tag: tag, isSmall: true),
+                    if (template != null) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: LiubaiColors.lightInkGray.withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(template.emoji, style: const TextStyle(fontSize: 12)),
+                            const SizedBox(width: 4),
+                            Text(
+                              template.name,
+                              style: LiubaiTypography.caption.copyWith(
+                                color: LiubaiColors.inkBlack,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                       const SizedBox(width: 8),
                     ],
-                    // 设置的时长
                     Text(
                       '${session.plannedDuration}分钟',
                       style: LiubaiTypography.body,
                     ),
                     const SizedBox(width: 8),
-                    // 完成状态
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
@@ -303,7 +316,6 @@ class _LogPageState extends State<LogPage> {
                   ],
                 ),
                 const SizedBox(height: 8),
-                // 进度条
                 Row(
                   children: [
                     Expanded(
@@ -334,8 +346,6 @@ class _LogPageState extends State<LogPage> {
               ],
             ),
           ),
-
-          // 删除按钮
           IconButton(
             onPressed: () => _deleteSession(session.id!),
             icon: const Icon(

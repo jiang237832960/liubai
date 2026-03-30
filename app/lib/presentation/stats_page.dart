@@ -3,7 +3,6 @@ import '../core/theme.dart';
 import '../core/utils.dart';
 import '../data/database.dart';
 import '../data/models.dart';
-import 'widgets/scene_tag_selector.dart';
 
 class StatsPage extends StatefulWidget {
   const StatsPage({super.key});
@@ -16,7 +15,7 @@ class _StatsPageState extends State<StatsPage> {
   List<DailyStats> _weekStats = [];
   List<DailyStats> _monthStats = [];
   Map<String, dynamic> _totalStats = {};
-  List<Map<String, dynamic>> _tagDistribution = [];
+  List<Map<String, dynamic>> _templateDistribution = [];
   bool _isLoading = true;
   int _selectedTab = 0; // 0: 周, 1: 月
 
@@ -39,13 +38,13 @@ class _StatsPageState extends State<StatsPage> {
       final weekStats = await DatabaseHelper.instance.getLast7DaysStats();
       final monthStats = await DatabaseHelper.instance.getLast30DaysStats();
       final totalStats = await DatabaseHelper.instance.getTotalStats();
-      final tagDistribution = await DatabaseHelper.instance.getTagDistribution();
+      final templateDistribution = await DatabaseHelper.instance.getTemplateDistribution();
 
       setState(() {
         _weekStats = weekStats;
         _monthStats = monthStats;
         _totalStats = totalStats;
-        _tagDistribution = tagDistribution;
+        _templateDistribution = templateDistribution;
         _isLoading = false;
       });
     } catch (e) {
@@ -82,8 +81,8 @@ class _StatsPageState extends State<StatsPage> {
 
                   const SizedBox(height: 24),
 
-                  // 标签分布
-                  _buildTagDistribution(),
+                  // 场景分布
+                  _buildTemplateDistribution(),
 
                   const SizedBox(height: 24),
 
@@ -147,15 +146,14 @@ class _StatsPageState extends State<StatsPage> {
     );
   }
 
-  Widget _buildTagDistribution() {
-    if (_tagDistribution.isEmpty) {
+  Widget _buildTemplateDistribution() {
+    if (_templateDistribution.isEmpty) {
       return const SizedBox.shrink();
     }
 
-    // 计算总时长用于百分比
-    final totalDuration = _tagDistribution.fold<int>(
+    final totalDuration = _templateDistribution.fold<int>(
       0,
-      (sum, tag) => sum + (tag['totalDuration'] as int),
+      (sum, template) => sum + (template['totalDuration'] as int),
     );
 
     return Container(
@@ -170,16 +168,15 @@ class _StatsPageState extends State<StatsPage> {
         children: [
           const Text('场景分布', style: LiubaiTypography.body),
           const SizedBox(height: 16),
-          // 横向条形图
-          ..._tagDistribution.where((tag) => tag['totalDuration'] > 0).map((tag) {
+          ..._templateDistribution.where((template) => template['totalDuration'] > 0).map((template) {
             final percentage = totalDuration > 0
-                ? (tag['totalDuration'] as int) / totalDuration
+                ? (template['totalDuration'] as int) / totalDuration
                 : 0.0;
-            return _buildTagBar(
-              tag['name'] as String,
-              tag['color'] as int,
-              tag['totalDuration'] as int,
-              tag['sessionCount'] as int,
+            return _buildTemplateBar(
+              template['emoji'] as String? ?? '📋',
+              template['name'] as String,
+              template['totalDuration'] as int,
+              template['sessionCount'] as int,
               percentage,
             );
           }),
@@ -188,16 +185,66 @@ class _StatsPageState extends State<StatsPage> {
     );
   }
 
-  Widget _buildTagBar(
+  Widget _buildTemplateBar(
+    String emoji,
     String name,
-    int colorValue,
     int duration,
     int count,
     double percentage,
   ) {
-    final color = Color(colorValue);
-
     return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Text(emoji, style: const TextStyle(fontSize: 16)),
+                  const SizedBox(width: 8),
+                  Text(name, style: LiubaiTypography.body),
+                ],
+              ),
+              Text(
+                '${(percentage * 100).toStringAsFixed(1)}%',
+                style: LiubaiTypography.caption,
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Stack(
+            children: [
+              Container(
+                height: 8,
+                decoration: BoxDecoration(
+                  color: LiubaiColors.lightInkGray.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+              Container(
+                height: 8,
+                width: MediaQuery.of(context).size.width * 0.7 * percentage,
+                decoration: BoxDecoration(
+                  color: LiubaiColors.inkBlack,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '${FormatUtils.formatDuration(duration)} · $count次',
+            style: const TextStyle(
+              fontSize: 12,
+              color: LiubaiColors.pineSmokeGray,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
       padding: const EdgeInsets.only(bottom: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
