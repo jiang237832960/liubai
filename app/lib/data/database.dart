@@ -19,7 +19,10 @@ class DatabaseHelper {
   /// 获取数据库实例（线程安全）
   Future<Database> get database async {
     if (_database != null) return _database!;
-    _database = await _initDB(_dbName);
+    final db = await _initDB(_dbName);
+    if (_database == null) {
+      _database = db;
+    }
     return _database!;
   }
 
